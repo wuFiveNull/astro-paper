@@ -7,6 +7,7 @@ import {
   transformerNotationWordHighlight,
 } from "@shikijs/transformers";
 import { transformerFileName } from "../utils/transformers/fileName";
+import { rehypeResponsiveTables } from "../utils/rehypeResponsiveTables.mjs";
 import type {
   RehypePlugins,
   RemarkPlugins,
@@ -18,7 +19,10 @@ export const remarkPlugins = [
   [remarkCollapse, { test: "Table of contents" }],
 ] satisfies RemarkPlugins;
 
-export const rehypePlugins = [rehypeCallouts] satisfies RehypePlugins;
+export const rehypePlugins = [
+  rehypeCallouts,
+  rehypeResponsiveTables,
+] satisfies RehypePlugins;
 
 export const shikiConfig = {
   themes: { light: "min-light", dark: "night-owl" },

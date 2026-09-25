@@ -1,6 +1,6 @@
 # AstroPaper API
 
-Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. The Astro site now renders public post pages through its Node SSR adapter and reads these APIs at request time. The database Markdown importer and authenticated write APIs remain planned work.
+Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. The Astro site now renders public post pages through its Node SSR adapter and reads these APIs at request time. A separate content preparation tool converts the repository's Markdown/MDX collection into reviewed, insert-only MySQL SQL; authenticated write APIs remain planned work.
 
 ## Requirements
 
@@ -39,9 +39,31 @@ The process binds to `127.0.0.1:8081` by default. Check `GET /api/v1/health` for
 - `GET /api/v1/tags/{tagSlug}/posts?page=0&size=10` filters published posts by tag.
 - `GET /api/v1/search?q=keyword&page=0&size=10` searches published post title, description, and Markdown source.
 
-Post metadata preserves the AstroPaper frontmatter names where practical (`pubDatetime`, `modDatetime`, `canonicalURL`, `ogImage`, `hideEditPost`). V3 adds storage for those fields. Existing MDX content is not imported or executed by the API; the migration/import tool will convert supported MDX to Markdown in a later milestone.
+Post metadata preserves the AstroPaper frontmatter names where practical (`pubDatetime`, `modDatetime`, `canonicalURL`, `ogImage`, `hideEditPost`). V3 adds storage for those fields. The API stores and renders Markdown; it does not execute database MDX.
 
-No administrator account or sample password is seeded. Bootstrap of the first administrator will be implemented as a deliberate, one-time administrative operation before authentication is enabled.
+## Prepare the Markdown/MDX import
+
+Run the migration tool from the repository root with Node.js 22.12 or later:
+
+```powershell
+node backend/tools/prepare-content-import.mjs
+```
+
+The default is a dry run. It validates frontmatter, route slugs, tags, dates, MDX conversion support, and referenced local images without changing the article sources or writing to a database.
+
+After confirming the target database already has the intended author account, generate the SQL and public image copies:
+
+```powershell
+node backend/tools/prepare-content-import.mjs --write --author-id 123
+```
+
+The command writes `backend/target/content-import.sql` and copies referenced local images under `public/legacy-assets/`. Review both outputs and commit the public assets before building the web image. The SQL runs in a single transaction, inserts only, and never updates or deletes existing records. Duplicate tag keys or post slugs cause the import to fail; review conflicts rather than silently overwriting them. Run it against the intended database only after taking a backup.
+
+The converter preserves existing route slugs and visible subdirectories, maps `draft: true` to `DRAFT`, keeps author/frontmatter metadata, removes supported `ResponsiveTable` MDX wrappers, and rewrites local image URLs to the copied public assets. It does not execute MDX. An unsupported component or import outside a fenced code example causes validation to fail. The original `.md`/`.mdx` files remain the rollback source.
+
+The importer has been exercised against the isolated cloud test database: 18 source posts, 15 tags, and 33 post/tag links were inserted, and a repeated run failed on a unique tag key without changing those counts. Production content has not been imported.
+
+No administrator account or sample password is seeded. Bootstrap of the first administrator will be implemented as a deliberate, one-time administrative operation before authentication is enabled. The isolated import test used a disabled test-only author account; it is not a production account.
 
 ## Isolated cloud smoke deployment
 
