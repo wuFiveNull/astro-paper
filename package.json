@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "test:markdown": "node --test src/utils/rehypeSanitizeMarkdown.test.mjs",
     "preview": "astro preview",
     "sync": "astro sync",
     "astro": "astro",
@@ -27,6 +28,8 @@
     "dayjs": "^1.11.21",
     "lodash.kebabcase": "^4.1.1",
     "rehype-callouts": "^2.2.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
     "remark-collapse": "^0.1.2",
     "remark-toc": "^9.0.0",
     "satori": "^0.26.0",

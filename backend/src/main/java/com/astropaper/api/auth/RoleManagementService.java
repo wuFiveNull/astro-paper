@@ -5,11 +5,13 @@ import com.astropaper.api.domain.entity.RoleEntity;
 import com.astropaper.api.domain.repository.PermissionRepository;
 import com.astropaper.api.domain.repository.RoleRepository;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TreeSet;
 
 @Service
@@ -18,15 +20,18 @@ public class RoleManagementService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final PermissionChecker permissionChecker;
+    private final AuditLogWriter auditLogWriter;
 
     public RoleManagementService(
         RoleRepository roleRepository,
         PermissionRepository permissionRepository,
-        PermissionChecker permissionChecker
+        PermissionChecker permissionChecker,
+        AuditLogWriter auditLogWriter
     ) {
         this.roleRepository = roleRepository;
         this.permissionRepository = permissionRepository;
         this.permissionChecker = permissionChecker;
+        this.auditLogWriter = auditLogWriter;
     }
 
     @Transactional(readOnly = true)
@@ -43,7 +48,11 @@ public class RoleManagementService {
 
     @Transactional
     @PreAuthorize("@permissionChecker.isAdministrator(authentication) and @permissionChecker.has(authentication, 'permission:manage')")
-    public RoleSummaryDto replacePermissions(String roleCode, PermissionAssignmentRequest request) {
+    public RoleSummaryDto replacePermissions(
+        String roleCode,
+        PermissionAssignmentRequest request,
+        Authentication actor
+    ) {
         String normalizedCode = roleCode.trim().toUpperCase(Locale.ROOT);
         if ("ADMIN".equals(normalizedCode)) {
             throw new InvalidAccessConfigurationException("The ADMIN role must keep all permissions and cannot be edited.");
@@ -62,7 +71,17 @@ public class RoleManagementService {
         if (permissions.size() != codes.size()) {
             throw new UnknownAccessCodeException("One or more requested permission codes do not exist.");
         }
+        List<String> previousPermissions = role.getPermissions().stream()
+            .map(PermissionEntity::getCode)
+            .sorted()
+            .toList();
         role.replacePermissions(permissions);
-        return RoleSummaryDto.from(roleRepository.saveAndFlush(role));
+        RoleEntity saved = roleRepository.saveAndFlush(role);
+        auditLogWriter.record(actor, "ROLE_PERMISSIONS_CHANGED", "ROLE", saved.getId(), Map.of(
+            "roleCode", saved.getCode(),
+            "before", previousPermissions,
+            "after", codes.stream().toList()
+        ));
+        return RoleSummaryDto.from(saved);
     }
 }

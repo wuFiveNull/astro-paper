@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class UserManagementService {
@@ -24,17 +26,20 @@ public class UserManagementService {
     private final RoleRepository roleRepository;
     private final PermissionChecker permissionChecker;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogWriter auditLogWriter;
 
     public UserManagementService(
         UserRepository userRepository,
         RoleRepository roleRepository,
         PasswordEncoder passwordEncoder,
-        PermissionChecker permissionChecker
+        PermissionChecker permissionChecker,
+        AuditLogWriter auditLogWriter
     ) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.permissionChecker = permissionChecker;
+        this.auditLogWriter = auditLogWriter;
     }
 
     @Transactional(readOnly = true)
@@ -57,7 +62,7 @@ public class UserManagementService {
 
     @Transactional
     @PreAuthorize("@permissionChecker.isAdministrator(authentication) and @permissionChecker.has(authentication, 'user:manage')")
-    public UserSummaryDto createUser(CreateUserRequest request) {
+    public UserSummaryDto createUser(CreateUserRequest request, Authentication actor) {
         String username = request.username().trim();
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         if (userRepository.existsByUsernameIgnoreCase(username) || userRepository.existsByEmailIgnoreCase(email)) {
@@ -75,6 +80,10 @@ public class UserManagementService {
         );
         user.addRole(userRole);
         UserEntity saved = userRepository.saveAndFlush(user);
+        auditLogWriter.record(actor, "USER_CREATED", "USER", saved.getId(), Map.of(
+            "username", saved.getUsername(),
+            "status", saved.getStatus()
+        ));
         return UserSummaryDto.from(saved);
     }
 
@@ -100,24 +109,38 @@ public class UserManagementService {
 
         var roles = roleRepository.findAllByCodeIn(roleCodes);
         if (roles.size() != roleCodes.size()) throw new UnknownAccessCodeException("One or more requested role codes do not exist.");
+        List<String> previousRoles = user.getRoles().stream().map(RoleEntity::getCode).sorted().toList();
         user.replaceRoles(roles);
-        return UserSummaryDto.from(userRepository.saveAndFlush(user));
+        UserEntity saved = userRepository.saveAndFlush(user);
+        auditLogWriter.record(actor, "USER_ROLES_CHANGED", "USER", saved.getId(), Map.of(
+            "username", saved.getUsername(),
+            "before", previousRoles,
+            "after", roleCodes.stream().toList()
+        ));
+        return UserSummaryDto.from(saved);
     }
 
     @Transactional
     @PreAuthorize("@permissionChecker.isAdministrator(authentication) and @permissionChecker.has(authentication, 'user:manage')")
-    public UserSummaryDto changeUserStatus(Long userId, ChangeUserStatusRequest request) {
+    public UserSummaryDto changeUserStatus(Long userId, ChangeUserStatusRequest request, Authentication actor) {
         roleRepository.lockByCode("ADMIN")
             .orElseThrow(() -> new IllegalStateException("The ADMIN role is missing from the database."));
         UserEntity user = userRepository.findByIdWithAuthorization(userId)
             .orElseThrow(() -> new AdminResourceNotFoundException("The requested account does not exist."));
+        String previousStatus = user.getStatus();
         boolean losesLastActiveAdmin = "ACTIVE".equals(user.getStatus())
             && !"ACTIVE".equals(request.status())
             && user.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))
             && userRepository.countActiveAdministrators() <= 1;
         if (losesLastActiveAdmin) throw new LastAdministratorException();
         user.changeStatus(request.status());
-        return UserSummaryDto.from(userRepository.saveAndFlush(user));
+        UserEntity saved = userRepository.saveAndFlush(user);
+        auditLogWriter.record(actor, "USER_STATUS_CHANGED", "USER", saved.getId(), Map.of(
+            "username", saved.getUsername(),
+            "before", previousStatus,
+            "after", saved.getStatus()
+        ));
+        return UserSummaryDto.from(saved);
     }
 
     static void ensureBcryptInputLength(String password) {

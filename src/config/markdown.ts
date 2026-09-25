@@ -8,6 +8,7 @@ import {
 } from "@shikijs/transformers";
 import { transformerFileName } from "../utils/transformers/fileName";
 import { rehypeResponsiveTables } from "../utils/rehypeResponsiveTables.mjs";
+import { rehypeSanitizeMarkdown } from "../utils/rehypeSanitizeMarkdown.mjs";
 import type {
   RehypePlugins,
   RemarkPlugins,
@@ -22,6 +23,11 @@ export const remarkPlugins = [
 export const rehypePlugins = [
   rehypeCallouts,
   rehypeResponsiveTables,
+] satisfies RehypePlugins;
+
+export const databaseRehypePlugins = [
+  ...rehypePlugins,
+  rehypeSanitizeMarkdown,
 ] satisfies RehypePlugins;
 
 export const shikiConfig = {

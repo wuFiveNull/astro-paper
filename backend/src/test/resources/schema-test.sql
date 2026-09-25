@@ -103,6 +103,17 @@ CREATE TABLE messages (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+CREATE TABLE audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id BIGINT,
+    action VARCHAR(100) NOT NULL,
+    target_type VARCHAR(100) NOT NULL,
+    target_id BIGINT,
+    details JSON,
+    created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_user_id) REFERENCES users (id)
+);
+
 INSERT INTO roles (id, code, name, description) VALUES
     (1, 'ADMIN', 'Administrator', 'Full access to blog administration'),
     (2, 'EDITOR', 'Editor', 'Manage and publish blog content'),

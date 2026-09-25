@@ -17,9 +17,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final LoginRateLimiter loginRateLimiter;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, LoginRateLimiter loginRateLimiter) {
         this.authService = authService;
+        this.loginRateLimiter = loginRateLimiter;
     }
 
     @GetMapping("/csrf")
@@ -33,9 +35,14 @@ public class AuthController {
         HttpServletRequest servletRequest,
         HttpServletResponse servletResponse
     ) {
+        String attemptKey = loginRateLimiter.key(request.username(), servletRequest.getRemoteAddr());
+        loginRateLimiter.assertAllowed(attemptKey);
         try {
-            return authService.login(request, servletRequest, servletResponse);
+            UserSummaryDto user = authService.login(request, servletRequest, servletResponse);
+            loginRateLimiter.recordSuccess(attemptKey);
+            return user;
         } catch (AuthenticationException exception) {
+            loginRateLimiter.recordFailure(attemptKey);
             throw new InvalidCredentialsException();
         }
     }

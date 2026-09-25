@@ -1,11 +1,15 @@
 import { createMarkdownProcessor } from "@astrojs/markdown-remark";
-import { rehypePlugins, remarkPlugins, shikiConfig } from "@/config/markdown";
+import {
+  databaseRehypePlugins,
+  remarkPlugins,
+  shikiConfig,
+} from "@/config/markdown";
 
 const processor = createMarkdownProcessor({
   syntaxHighlight: "shiki",
   shikiConfig,
   remarkPlugins,
-  rehypePlugins,
+  rehypePlugins: databaseRehypePlugins,
 });
 
 export async function renderMarkdown(markdown: string): Promise<string> {

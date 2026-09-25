@@ -8,6 +8,7 @@ import com.astropaper.api.auth.InvalidAccessConfigurationException;
 import com.astropaper.api.auth.LastAdministratorException;
 import com.astropaper.api.auth.UnknownAccessCodeException;
 import com.astropaper.api.auth.UserAlreadyExistsException;
+import com.astropaper.api.auth.TooManyLoginAttemptsException;
 import com.astropaper.api.articles.ArticleConflictException;
 import com.astropaper.api.articles.ArticleOwnershipException;
 import com.astropaper.api.articles.InvalidArticleRequestException;
@@ -32,6 +33,13 @@ public class ApiExceptionHandler {
     public ProblemDetail handleInvalidCredentials() {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
         problem.setTitle("Invalid credentials");
+        return problem;
+    }
+
+    @ExceptionHandler(TooManyLoginAttemptsException.class)
+    public ProblemDetail handleTooManyLoginAttempts(TooManyLoginAttemptsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle("Too many sign-in attempts");
         return problem;
     }
 

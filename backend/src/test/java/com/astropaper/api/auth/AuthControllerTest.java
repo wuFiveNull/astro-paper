@@ -170,6 +170,27 @@ class AuthControllerTest {
         org.junit.jupiter.api.Assertions.assertTrue(userId > 1);
     }
 
+    @Test
+    void appliesRateLimitAfterRepeatedInvalidLogins() throws Exception {
+        CsrfSession csrf = getCsrf(null);
+        for (int attempt = 0; attempt < 10; attempt++) {
+            mockMvc.perform(post("/api/v1/auth/login")
+                    .session(csrf.session())
+                    .header(CSRF_HEADER, csrf.token())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"username\":\"rate-limited-user\",\"password\":\"WrongPassword123!\"}"))
+                .andExpect(status().isUnauthorized());
+        }
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                .session(csrf.session())
+                .header(CSRF_HEADER, csrf.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"rate-limited-user\",\"password\":\"WrongPassword123!\"}"))
+            .andExpect(status().isTooManyRequests())
+            .andExpect(jsonPath("$.title").value("Too many sign-in attempts"));
+    }
+
     private CsrfSession getCsrf(MockHttpSession session) throws Exception {
         MockHttpServletRequestBuilder request = get("/api/v1/auth/csrf");
         if (session != null) request.session(session);

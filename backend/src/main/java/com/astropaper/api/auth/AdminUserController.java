@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,7 +36,7 @@ public class AdminUserController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public UserSummaryDto createUser(@Valid @RequestBody CreateUserRequest request) {
-        return userManagementService.createUser(request);
+    public UserSummaryDto createUser(@Valid @RequestBody CreateUserRequest request, Authentication authentication) {
+        return userManagementService.createUser(request, authentication);
     }
 }

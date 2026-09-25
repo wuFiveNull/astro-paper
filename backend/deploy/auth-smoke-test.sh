@@ -25,7 +25,7 @@ fi
 umask 077
 db_password="$(openssl rand -hex 32)"
 mysql_root_password="$(openssl rand -hex 32)"
-admin_password="$(openssl rand -hex 24)"
+admin_password="${SMOKE_ADMIN_PASSWORD:-$(openssl rand -hex 24)}"
 user_password="$(openssl rand -hex 24)"
 editor_password="$(openssl rand -hex 24)"
 admin_username="codex-smoke-admin"
@@ -110,6 +110,14 @@ wait_for_api() {
 wait_for_api
 curl --fail --silent --show-error "${base_url}/api/v1/health" >/dev/null
 
+# Verify the API blocks repeated password guesses without affecting other names.
+mapfile -t anonymous_csrf < <(fetch_csrf "$anonymous_cookie_jar")
+invalid_login_payload='{"username":"rate-limited-smoke-user","password":"InvalidSmokePassword123!"}'
+for _ in $(seq 1 10); do
+  request_json POST /api/v1/auth/login "$anonymous_cookie_jar" "${anonymous_csrf[0]}" "${anonymous_csrf[1]}" "$invalid_login_payload" 401
+done
+request_json POST /api/v1/auth/login "$anonymous_cookie_jar" "${anonymous_csrf[0]}" "${anonymous_csrf[1]}" "$invalid_login_payload" 429
+
 # Remove bootstrap credentials from the API container after the first account is created.
 sed -i '/^ADMIN_BOOTSTRAP_/d' .env
 printf 'ADMIN_BOOTSTRAP_ENABLED=false\n' >> .env
@@ -171,6 +179,10 @@ editor_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 request_json PUT "/api/v1/admin/users/${editor_id}/roles" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" '{"roleCodes":["EDITOR"]}' 200
 grep -q '"roles":\["EDITOR"\]' "$response_file"
+
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+editor_permissions_payload='{"permissionCodes":["post:read","post:create","post:update","post:publish","comment:moderate"]}'
+request_json PUT /api/v1/admin/roles/EDITOR/permissions "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$editor_permissions_payload" 200
 
 mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
 user_login_payload="$(printf '{"username":"%s","password":"%s"}' "$user_username" "$user_password")"
@@ -247,5 +259,14 @@ grep -q '"status":"DISABLED"' "$response_file"
 inactive_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/auth/me")"
 [[ "$inactive_status" == 401 ]]
 
-unset db_password mysql_root_password admin_password user_password editor_password
+audit_count="$(printf '%s\n' "SELECT COUNT(*) FROM audit_logs WHERE action IN ('USER_CREATED','USER_ROLES_CHANGED','USER_STATUS_CHANGED','ROLE_PERMISSIONS_CHANGED');" | "${compose[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql --batch --skip-column-names --user="$MYSQL_USER" "$MYSQL_DATABASE"')"
+[[ "$audit_count" == 5 ]]
+
+unset db_password mysql_root_password admin_password user_password editor_password SMOKE_ADMIN_PASSWORD
 printf 'Cloud API smoke test passed: MySQL health, authentication/RBAC, Markdown article management and publication, editor ownership boundaries, protected comments and moderation, protected guestbook submission and status update, and account disable.\n'
+printf 'Cloud security checks passed: 10 invalid sign-in attempts are rate limited and account/role mutations create five audit records.\n'
+
+if [[ "${SMOKE_HOLD_FOR_BROWSER:-false}" == true ]]; then
+  printf 'Temporary browser test services are ready on 127.0.0.1:%s. Press Enter to stop and clean them up.\n' "$api_host_port"
+  read -r _ </dev/tty
+fi

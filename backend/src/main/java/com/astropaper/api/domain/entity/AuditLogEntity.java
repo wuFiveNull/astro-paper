@@ -46,6 +46,14 @@ public class AuditLogEntity {
     protected AuditLogEntity() {
     }
 
+    public AuditLogEntity(UserEntity actor, String action, String targetType, Long targetId, Map<String, Object> details) {
+        this.actor = actor;
+        this.action = action;
+        this.targetType = targetType;
+        this.targetId = targetId;
+        this.details = details == null ? Map.of() : Map.copyOf(details);
+    }
+
     public Long getId() { return id; }
     public UserEntity getActor() { return actor; }
     public String getAction() { return action; }

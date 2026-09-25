@@ -1,5 +1,6 @@
 package com.astropaper.api.articles;
 
+import com.astropaper.api.domain.repository.AuditLogRepository;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +39,9 @@ class ArticleManagementControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     @Test
     void managesMarkdownPostsWithPermissionAndOwnershipChecks() throws Exception {
@@ -152,6 +156,22 @@ class ArticleManagementControllerTest {
         CsrfSession reader = login("article-reader", "ReaderTestPassword123!");
         mockMvc.perform(get("/api/v1/admin/posts").session(reader.session()))
             .andExpect(status().isForbidden());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/admin/roles/EDITOR/permissions")
+                .session(adminCsrf.session())
+                .header(CSRF_HEADER, adminCsrf.token())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"permissionCodes\":[\"post:read\",\"post:create\",\"post:update\",\"post:publish\",\"comment:moderate\"]}"))
+            .andExpect(status().isOk());
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+            3,
+            auditLogRepository.countByActionIn(java.util.List.of("USER_CREATED", "USER_ROLES_CHANGED"))
+        );
+        org.junit.jupiter.api.Assertions.assertEquals(
+            1,
+            auditLogRepository.countByActionIn(java.util.List.of("ROLE_PERMISSIONS_CHANGED"))
+        );
     }
 
     private CsrfSession login(String username, String password) throws Exception {

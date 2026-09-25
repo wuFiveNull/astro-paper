@@ -33,8 +33,12 @@ public class AdminAccessController {
     }
 
     @PutMapping("/users/{userId}/status")
-    public UserSummaryDto changeStatus(@PathVariable Long userId, @Valid @RequestBody ChangeUserStatusRequest request) {
-        return userManagementService.changeUserStatus(userId, request);
+    public UserSummaryDto changeStatus(
+        @PathVariable Long userId,
+        @Valid @RequestBody ChangeUserStatusRequest request,
+        Authentication authentication
+    ) {
+        return userManagementService.changeUserStatus(userId, request, authentication);
     }
 
     @GetMapping("/roles")
@@ -50,8 +54,9 @@ public class AdminAccessController {
     @PutMapping("/roles/{roleCode}/permissions")
     public RoleSummaryDto replacePermissions(
         @PathVariable String roleCode,
-        @Valid @RequestBody PermissionAssignmentRequest request
+        @Valid @RequestBody PermissionAssignmentRequest request,
+        Authentication authentication
     ) {
-        return roleManagementService.replacePermissions(roleCode, request);
+        return roleManagementService.replacePermissions(roleCode, request, authentication);
     }
 }
