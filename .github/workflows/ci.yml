@@ -4,6 +4,10 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches:
+      - main
+      - "codex/**"
   pull_request:
     types:
       - opened
@@ -44,3 +48,23 @@ jobs:
 
       - name: "🚀 Build the project"
         run: pnpm run build
+
+  backend:
+    name: Backend build & smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "☁️ Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "☕ Set up Java 21"
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+
+      - name: "🔎 Build backend and run smoke tests"
+        run: mvn --batch-mode --no-transfer-progress -f backend/pom.xml clean verify

@@ -1,5 +1,7 @@
 # build output
 dist/
+backend/target/
+backend/logs/
 
 # generated types
 .astro/

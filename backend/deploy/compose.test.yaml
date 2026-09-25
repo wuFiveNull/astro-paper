@@ -1,0 +1,81 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: "no"
+    mem_limit: 384m
+    command:
+      - --innodb-buffer-pool-size=64M
+      - --max-connections=32
+      - --performance-schema=OFF
+      - --table-open-cache=128
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-astro_paper}
+      MYSQL_USER: ${DB_USERNAME:?Set DB_USERNAME in the private server .env file}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the private server .env file}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in the private server .env file}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mysqladmin ping --host=127.0.0.1 --user=root --password="$${MYSQL_ROOT_PASSWORD}" --silent
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  api:
+    image: eclipse-temurin:21-jre
+    restart: "no"
+    mem_limit: 512m
+    user: "10001:10001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      - java
+      - -Xms64m
+      - -Xmx192m
+      - -XX:MaxMetaspaceSize=128m
+      - -XX:MaxDirectMemorySize=32m
+      - -XX:ReservedCodeCacheSize=32m
+      - -jar
+      - /app/astro-paper-api.jar
+    environment:
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-astro_paper}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:?Set DB_USERNAME in the private server .env file}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in the private server .env file}
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8081
+    volumes:
+      - ./astro-paper-api.jar:/app/astro-paper-api.jar:ro
+    ports:
+      - "127.0.0.1:${API_HOST_PORT:-18081}:8081"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  mysql_data:
