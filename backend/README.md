@@ -99,7 +99,7 @@ Verify `http://127.0.0.1:18081/api/v1/health`, `http://127.0.0.1:18081/actuator/
 For an API-only authentication smoke test on a memory-constrained server, copy the root `Dockerfile`, the locally built JAR, `deploy/compose.test.yaml`, `deploy/compose.auth-smoke.yaml`, and `deploy/auth-smoke-test.sh` into a private directory that preserves the same `backend/deploy/` subdirectory. Start it from that subdirectory with a new Compose project name and an unused loopback port:
 
 ```bash
-COMPOSE_PROJECT_NAME=astro-paper-api-auth-smoke API_HOST_PORT=18082 bash auth-smoke-test.sh
+COMPOSE_PROJECT_NAME=astro-paper-api-auth-smoke-local API_HOST_PORT=18082 bash auth-smoke-test.sh
 ```
 
-The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, standard account creation, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 576 MiB, then stops both containers without deleting the new test volume. Keep the generated `.env` private. Production services and their database must not be used for this smoke test.
+The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, standard account creation, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 640 MiB, and removes its generated `.env`, cookie jars, containers, and dedicated disposable database volume when it exits, including after a failed run. Its project name must start with `astro-paper-api-auth-smoke-`; cleanup is scoped to that Compose project. It does not stop or connect to the production stack.

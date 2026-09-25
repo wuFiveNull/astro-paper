@@ -4,9 +4,14 @@ set -euo pipefail
 deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$deploy_dir"
 
-project_name="${COMPOSE_PROJECT_NAME:-astro-paper-api-auth-smoke}"
+project_name="${COMPOSE_PROJECT_NAME:-astro-paper-api-auth-smoke-local}"
 api_host_port="${API_HOST_PORT:-18082}"
 base_url="http://127.0.0.1:${api_host_port}"
+
+if [[ ! "$project_name" =~ ^astro-paper-api-auth-smoke-[a-z0-9][a-z0-9-]*$ ]]; then
+  printf 'COMPOSE_PROJECT_NAME must start with astro-paper-api-auth-smoke- so cleanup stays isolated.\n' >&2
+  exit 1
+fi
 
 if [[ -e .env ]]; then
   printf 'Refusing to overwrite existing %s/.env\n' "$deploy_dir" >&2
@@ -51,8 +56,8 @@ response_file="${smoke_tmp_dir}/response.json"
 touch "$admin_cookie_jar" "$user_cookie_jar"
 
 cleanup() {
-  "${compose[@]}" down >/dev/null 2>&1 || true
-  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$response_file"
+  "${compose[@]}" down --volumes >/dev/null 2>&1 || true
+  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$response_file" .env
   rmdir -- "$smoke_tmp_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
