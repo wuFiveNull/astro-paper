@@ -1,12 +1,13 @@
 import type { APIRoute } from "astro";
-import { fontData, experimental_getFontFileURL } from "astro:assets";
+import { fontData } from "astro:assets";
 import satori from "satori";
 import sharp from "sharp";
 import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
 import { BlogApiError, getPost } from "@/lib/blog-api";
+import { loadOgFont } from "@/utils/loadOgFont";
 import config from "@/config";
 
-export const GET: APIRoute = async ({ params, url }) => {
+export const GET: APIRoute = async ({ params }) => {
   if (!config.features.dynamicOgImage) {
     return new Response(null, { status: 404, statusText: "Not found" });
   }
@@ -35,12 +36,8 @@ export const GET: APIRoute = async ({ params, url }) => {
   }
 
   const [regularData, boldData] = await Promise.all([
-    fetch(experimental_getFontFileURL(regularFontPath, url)).then(res =>
-      res.arrayBuffer()
-    ),
-    fetch(experimental_getFontFileURL(boldFontPath, url)).then(res =>
-      res.arrayBuffer()
-    ),
+    loadOgFont(regularFontPath),
+    loadOgFont(boldFontPath),
   ]);
 
   const svg = await satori(

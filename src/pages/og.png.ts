@@ -1,11 +1,12 @@
 import type { APIRoute } from "astro";
 import satori from "satori";
 import sharp from "sharp";
-import { fontData, experimental_getFontFileURL } from "astro:assets";
+import { fontData } from "astro:assets";
 import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
+import { loadOgFont } from "@/utils/loadOgFont";
 import config from "@/config";
 
-export const GET: APIRoute = async context => {
+export const GET: APIRoute = async () => {
   const fonts = fontData["--font-google-sans-code"];
   const regularFontPath = getFontPathByWeight(fonts, 400);
   const boldFontPath = getFontPathByWeight(fonts, 700);
@@ -15,12 +16,8 @@ export const GET: APIRoute = async context => {
   }
 
   const [regularData, boldData] = await Promise.all([
-    fetch(experimental_getFontFileURL(regularFontPath, context.url)).then(res =>
-      res.arrayBuffer()
-    ),
-    fetch(experimental_getFontFileURL(boldFontPath, context.url)).then(res =>
-      res.arrayBuffer()
-    ),
+    loadOgFont(regularFontPath),
+    loadOgFont(boldFontPath),
   ]);
 
   const svg = await satori(
