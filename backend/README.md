@@ -1,6 +1,6 @@
 # AstroPaper API
 
-Spring Boot backend for the AstroPaper blog. The current milestone provides the API foundation, a health endpoint, and Flyway-managed MySQL schema for accounts, roles, permissions, posts, tags, comments, messages, and audit records.
+Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. Astro pages still use the static content collection until the SSR integration and Markdown import milestones are implemented.
 
 ## Requirements
 
@@ -30,6 +30,16 @@ mvn -f backend/pom.xml spring-boot:run
 ```
 
 The process binds to `127.0.0.1:8081` by default. Check `GET /api/v1/health` for process health and `GET /actuator/health` for application readiness, including database connectivity. Set `SERVER_ADDRESS` and `SERVER_PORT` explicitly if the reverse proxy requires different local values.
+
+## Public content API
+
+- `GET /api/v1/posts?page=0&size=10` returns published posts whose publication time has arrived.
+- `GET /api/v1/posts/{slug}` returns the post metadata and Markdown body.
+- `GET /api/v1/tags` lists tags that have at least one public post.
+- `GET /api/v1/tags/{tagSlug}/posts?page=0&size=10` filters published posts by tag.
+- `GET /api/v1/search?q=keyword&page=0&size=10` searches published post title, description, and Markdown source.
+
+Post metadata preserves the AstroPaper frontmatter names where practical (`pubDatetime`, `modDatetime`, `canonicalURL`, `ogImage`, `hideEditPost`). V3 adds storage for those fields. Existing MDX content is not imported or executed by the API; the migration/import tool will convert supported MDX to Markdown in a later milestone.
 
 No administrator account or sample password is seeded. Bootstrap of the first administrator will be implemented as a deliberate, one-time administrative operation before authentication is enabled.
 

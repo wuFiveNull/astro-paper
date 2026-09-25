@@ -46,8 +46,29 @@ public class PostEntity {
     @JoinColumn(name = "author_id", nullable = false)
     private UserEntity author;
 
+    @Column(name = "author_name", length = 100)
+    private String authorName;
+
     @Column(name = "published_at")
     private Instant publishedAt;
+
+    @Column(name = "modified_at")
+    private Instant modifiedAt;
+
+    @Column(length = 64)
+    private String timezone;
+
+    @Column(nullable = false)
+    private boolean featured;
+
+    @Column(name = "canonical_url", length = 2048)
+    private String canonicalUrl;
+
+    @Column(name = "og_image_url", length = 2048)
+    private String ogImageUrl;
+
+    @Column(name = "hide_edit_post", nullable = false)
+    private boolean hideEditPost;
 
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private Instant createdAt;
@@ -74,7 +95,14 @@ public class PostEntity {
     public String getCoverImageUrl() { return coverImageUrl; }
     public String getStatus() { return status; }
     public UserEntity getAuthor() { return author; }
+    public String getAuthorName() { return authorName; }
     public Instant getPublishedAt() { return publishedAt; }
+    public Instant getModifiedAt() { return modifiedAt; }
+    public String getTimezone() { return timezone; }
+    public boolean isFeatured() { return featured; }
+    public String getCanonicalUrl() { return canonicalUrl; }
+    public String getOgImageUrl() { return ogImageUrl; }
+    public boolean isHideEditPost() { return hideEditPost; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Set<TagEntity> getTags() { return tags; }
