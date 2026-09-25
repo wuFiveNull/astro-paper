@@ -96,11 +96,10 @@ docker compose --project-name astro-paper-api-test -f compose.test.yaml up -d
 
 Verify `http://127.0.0.1:18081/api/v1/health`, `http://127.0.0.1:18081/actuator/health`, and `http://127.0.0.1:18080/` from the server. Keep the private `.env` on the server only. The named MySQL volume retains test data across container restarts; do not remove it unless its data is intentionally disposable.
 
-For an API-only authentication smoke test on a memory-constrained server, copy the locally built JAR, `deploy/compose.test.yaml`, and `deploy/compose.auth-smoke.yaml` to a private directory on the server. Configure a new Compose project name, a distinct host port such as `18082`, and new private MySQL credentials in that directory's `.env`. To exercise first-admin initialization, temporarily set the `ADMIN_BOOTSTRAP_*` values there, then run:
+For an API-only authentication smoke test on a memory-constrained server, copy the root `Dockerfile`, the locally built JAR, `deploy/compose.test.yaml`, `deploy/compose.auth-smoke.yaml`, and `deploy/auth-smoke-test.sh` into a private directory that preserves the same `backend/deploy/` subdirectory. Start it from that subdirectory with a new Compose project name and an unused loopback port:
 
 ```bash
-docker compose --project-name astro-paper-api-auth-smoke \
-  -f compose.test.yaml -f compose.auth-smoke.yaml up -d mysql api
+COMPOSE_PROJECT_NAME=astro-paper-api-auth-smoke API_HOST_PORT=18082 bash auth-smoke-test.sh
 ```
 
-This starts only the isolated MySQL and API services; it skips the Astro image build. The override caps their combined memory at 576 MiB. Check API health and authentication endpoints on `127.0.0.1:18082`, then remove bootstrap secrets from `.env`, recreate the API container, and stop both containers without `-v`. The named test volume can be retained for inspection; production services and their database must not be used for this smoke test.
+The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, standard account creation, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 576 MiB, then stops both containers without deleting the new test volume. Keep the generated `.env` private. Production services and their database must not be used for this smoke test.
