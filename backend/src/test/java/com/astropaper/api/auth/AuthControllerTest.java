@@ -79,6 +79,11 @@ class AuthControllerTest {
             .andReturn();
         long userId = extractId(createdUser);
 
+        mockMvc.perform(get("/api/v1/admin/users").session(authenticatedAdminCsrf.session()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content[0].username").value("initial-admin"))
+            .andExpect(jsonPath("$.content[1].username").value("reader-one"));
+
         mockMvc.perform(post("/api/v1/admin/users")
                 .session(authenticatedAdminCsrf.session())
                 .contentType(MediaType.APPLICATION_JSON)
@@ -136,6 +141,8 @@ class AuthControllerTest {
             .andExpect(jsonPath("$.permissions").value(org.hamcrest.Matchers.contains("message:create")));
 
         mockMvc.perform(get("/api/v1/admin/roles").session(authenticatedUserCsrf.session()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/v1/admin/users").session(authenticatedUserCsrf.session()))
             .andExpect(status().isForbidden());
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/admin/users/" + userId + "/status")

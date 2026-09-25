@@ -1,4 +1,5 @@
 ---
+import { getRelativeLocaleUrl } from "astro:i18n";
 import PostLayout from "@/layouts/PostLayout.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
@@ -21,6 +22,7 @@ import ShareLinks from "./_components/ShareLinks.astro";
 import BackButton from "./_components/BackButton.astro";
 import BackToTopButton from "./_components/BackToTopButton.astro";
 import AdjacentPostNav from "./_components/AdjacentPostNav.astro";
+import CommentsSection from "./_components/CommentsSection.astro";
 import config from "@/config";
 
 export const prerender = false;
@@ -87,6 +89,9 @@ const postOgImage =
     : resolveDefaultOgImagePath(config));
 const resolvedOgImage = new URL(postOgImage, Astro.url.origin).href;
 const hideSourceEditLink = true;
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", `${Astro.url.pathname}${Astro.url.search}`);
 ---
 
 <PostLayout
@@ -165,6 +170,10 @@ const hideSourceEditLink = true;
     </ul>
 
     <ShareLinks />
+
+    <hr class="my-8 border-dashed" />
+
+    <CommentsSection postSlug={post.slug} loginUrl={`${loginUrl.pathname}${loginUrl.search}`} />
 
     <hr class="my-8 border-dashed" />
 

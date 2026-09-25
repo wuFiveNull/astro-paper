@@ -50,6 +50,8 @@ The first administrator is created only when the database has no user accounts. 
 
 The backend's `ADMIN`, `EDITOR`, and `USER` roles and permission codes are seeded by Flyway. This milestone implements login, logout, current-user lookup, first-admin bootstrap, account status changes, role assignment, permission editing, and account creation. Sessions are held by the single API instance; an API restart signs users out.
 
+Only an active administrator with `user:manage` can list accounts or create them. New accounts always receive `USER`; no public registration endpoint exists.
+
 ## Public content API
 
 - `GET /api/v1/posts?page=0&size=10` returns published posts whose publication time has arrived.

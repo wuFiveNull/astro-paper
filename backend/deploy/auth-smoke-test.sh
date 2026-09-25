@@ -130,6 +130,8 @@ admin_me="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${ba
 [[ "$admin_me" == *'"username":"codex-smoke-admin"'* ]]
 roles_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/roles")"
 [[ "$roles_status" == 200 ]]
+admin_users="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/users")"
+[[ "$admin_users" == *'"username":"codex-smoke-admin"'* ]]
 
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 user_payload="$(printf '{"username":"%s","email":"%s","password":"%s","displayName":"Cloud Smoke User"}' "$user_username" "$user_email" "$user_password")"
@@ -147,6 +149,8 @@ mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
 request_json POST /api/v1/admin/users "$user_cookie_jar" "${user_csrf[0]}" "${user_csrf[1]}" "$user_payload" 403
 user_roles_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/roles")"
 [[ "$user_roles_status" == 403 ]]
+user_admin_users_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/users")"
+[[ "$user_admin_users_status" == 403 ]]
 user_comments_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/comments")"
 [[ "$user_comments_status" == 403 ]]
 user_messages_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/messages")"

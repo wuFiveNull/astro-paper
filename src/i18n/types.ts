@@ -4,6 +4,8 @@ export interface UIStrings {
     posts: string;
     tags: string;
     about: string;
+    guestbook: string;
+    account: string;
     archives: string;
     search: string;
   };
@@ -50,6 +52,10 @@ export interface UIStrings {
 
     searchTitle: string;
     searchDesc: string;
+
+    loginTitle: string;
+    accountTitle: string;
+    guestbookTitle: string;
   };
   a11y: {
     skipToContent: string;

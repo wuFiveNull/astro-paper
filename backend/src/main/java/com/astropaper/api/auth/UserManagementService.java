@@ -4,6 +4,10 @@ import com.astropaper.api.domain.entity.RoleEntity;
 import com.astropaper.api.domain.entity.UserEntity;
 import com.astropaper.api.domain.repository.RoleRepository;
 import com.astropaper.api.domain.repository.UserRepository;
+import com.astropaper.api.publiccontent.dto.PageResponseDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +35,24 @@ public class UserManagementService {
         this.roleRepository = roleRepository;
         this.passwordEncoder = passwordEncoder;
         this.permissionChecker = permissionChecker;
+    }
+
+    @Transactional(readOnly = true)
+    @PreAuthorize("@permissionChecker.isAdministrator(authentication) and @permissionChecker.has(authentication, 'user:manage')")
+    public PageResponseDto<UserSummaryDto> listUsers(int page, int size) {
+        Page<UserEntity> results = userRepository.findAll(
+            PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "username"))
+        );
+        Page<UserSummaryDto> mapped = results.map(UserSummaryDto::from);
+        return new PageResponseDto<>(
+            mapped.getContent(),
+            mapped.getNumber(),
+            mapped.getSize(),
+            mapped.getTotalElements(),
+            mapped.getTotalPages(),
+            mapped.isFirst(),
+            mapped.isLast()
+        );
     }
 
     @Transactional

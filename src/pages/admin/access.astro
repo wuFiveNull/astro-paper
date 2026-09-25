@@ -1,0 +1,172 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`Role and permission management | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle="Role and permission management" class="max-w-app">
+    <p id="access-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Checking permissions…
+    </p>
+    <a
+      id="access-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+    <section id="access-workspace" class="mt-6 max-w-app space-y-5" hidden></section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser, sendJson } from "@/lib/session-api";
+
+  type Role = {
+    code: string;
+    name: string;
+    description: string | null;
+    permissions: string[];
+  };
+  type Permission = { code: string; description: string };
+  const protectedCodes = new Set(["user:manage", "role:manage", "permission:manage"]);
+
+  async function getJson<T>(path: string): Promise<T> {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(problem.detail ?? "Access settings could not be loaded.");
+    }
+    return (await response.json()) as T;
+  }
+
+  function setStatus(message: string, error = false) {
+    const node = document.querySelector<HTMLElement>("#access-status");
+    if (!node) return;
+    node.classList.toggle("text-red-600", error);
+    node.classList.toggle("text-muted-foreground", !error);
+    node.textContent = message;
+  }
+
+  function renderRole(role: Role, permissions: Permission[]) {
+    const card = document.createElement("article");
+    card.className = "border-border rounded border p-4";
+    const heading = document.createElement("h2");
+    heading.className = "text-lg font-semibold";
+    heading.textContent = `${role.name} (${role.code})`;
+    const description = document.createElement("p");
+    description.className = "text-muted-foreground mt-1 text-sm";
+    description.textContent = role.description ?? "";
+    card.append(heading, description);
+
+    if (role.code === "ADMIN") {
+      const immutable = document.createElement("p");
+      immutable.className = "mt-3 text-sm";
+      immutable.textContent = `Protected role. Permissions: ${role.permissions.join(", ")}`;
+      card.append(immutable);
+      return card;
+    }
+
+    const form = document.createElement("form");
+    form.className = "mt-4 space-y-4";
+    form.dataset.roleCode = role.code;
+    const grid = document.createElement("div");
+    grid.className = "grid gap-2 sm:grid-cols-2";
+    for (const permission of permissions) {
+      const label = document.createElement("label");
+      label.className = "flex items-start gap-2 text-sm";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = permission.code;
+      input.checked = role.permissions.includes(permission.code);
+      input.disabled = protectedCodes.has(permission.code);
+      input.className = "mt-1";
+      const copy = document.createElement("span");
+      copy.textContent = `${permission.code} — ${permission.description}`;
+      label.append(input, copy);
+      grid.append(label);
+    }
+    const save = document.createElement("button");
+    save.type = "submit";
+    save.className = "bg-accent text-accent-foreground rounded px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60";
+    save.textContent = "Save permissions";
+    form.append(grid, save);
+    card.append(form);
+    return card;
+  }
+
+  async function setupAccessManagement() {
+    const workspace = document.querySelector<HTMLElement>("#access-workspace");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#access-login-link");
+    if (!workspace || !loginLink) return;
+    workspace.hidden = true;
+    loginLink.hidden = true;
+    setStatus("Checking permissions…");
+    try {
+      const user = await getSessionUser();
+      if (!user) {
+        setStatus("Sign in to manage role permissions.");
+        loginLink.hidden = false;
+        return;
+      }
+      if (!user.roles.includes("ADMIN") || !user.permissions.includes("permission:manage")) {
+        setStatus("This account cannot manage permissions.", true);
+        return;
+      }
+      const [roles, permissions] = await Promise.all([
+        getJson<Role[]>("/api/v1/admin/roles"),
+        getJson<Permission[]>("/api/v1/admin/permissions"),
+      ]);
+      workspace.replaceChildren(...roles.map(role => renderRole(role, permissions)));
+      if (workspace.dataset.bound !== "true") {
+        workspace.dataset.bound = "true";
+        workspace.addEventListener("submit", async event => {
+          const form = event.target;
+          if (!(form instanceof HTMLFormElement) || !form.dataset.roleCode) return;
+          event.preventDefault();
+          const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+          const permissionCodes = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'))
+            .map(input => input.value);
+          if (button) button.disabled = true;
+          try {
+            await sendJson(`/api/v1/admin/roles/${encodeURIComponent(form.dataset.roleCode)}/permissions`, "PUT", {
+              permissionCodes,
+            });
+            setStatus(`Permissions saved for ${form.dataset.roleCode}.`);
+          } catch (error) {
+            setStatus(error instanceof Error ? error.message : "Permission update failed.", true);
+          } finally {
+            if (button) button.disabled = false;
+          }
+        });
+      }
+      workspace.hidden = false;
+      setStatus("Role permission settings are current.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Access settings are unavailable.", true);
+    }
+  }
+
+  setupAccessManagement();
+  document.addEventListener("astro:page-load", setupAccessManagement);
+</script>

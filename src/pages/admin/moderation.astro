@@ -1,0 +1,253 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`Moderation | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle="Comment and guestbook moderation" class="max-w-app">
+    <p id="moderation-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Checking permissions…
+    </p>
+    <a
+      id="moderation-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+
+    <section id="moderation-comments" class="mt-8" hidden>
+      <h2 class="text-xl font-semibold">Comments waiting for review</h2>
+      <p id="moderation-comments-status" class="text-muted-foreground mt-2 text-sm" role="status"></p>
+      <div id="moderation-comments-list" class="mt-4 space-y-5"></div>
+    </section>
+
+    <section id="moderation-messages" class="mt-10" hidden>
+      <h2 class="text-xl font-semibold">New guestbook messages</h2>
+      <p id="moderation-messages-status" class="text-muted-foreground mt-2 text-sm" role="status"></p>
+      <div id="moderation-messages-list" class="mt-4 space-y-5"></div>
+    </section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser, sendJson } from "@/lib/session-api";
+
+  type Comment = {
+    id: number;
+    postSlug: string;
+    postTitle: string;
+    parentId: number | null;
+    username: string;
+    displayName: string;
+    body: string;
+    status: string;
+  };
+  type Message = {
+    id: number;
+    senderName: string;
+    senderEmail: string;
+    subject: string | null;
+    body: string;
+    status: string;
+  };
+  type Page<T> = { content: T[] };
+
+  async function fetchPage<T>(path: string): Promise<T[]> {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(problem.detail ?? "This moderation queue could not be loaded.");
+    }
+    return ((await response.json()) as Page<T>).content;
+  }
+
+  function makeButton(label: string, resource: string, id: number, status: string) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "border-border rounded border px-3 py-1.5 text-sm font-medium hover:bg-muted disabled:opacity-60";
+    button.textContent = label;
+    button.dataset.resource = resource;
+    button.dataset.id = String(id);
+    button.dataset.status = status;
+    return button;
+  }
+
+  async function loadComments(canModerate: boolean) {
+    const panel = document.querySelector<HTMLElement>("#moderation-comments");
+    const status = document.querySelector<HTMLElement>("#moderation-comments-status");
+    const list = document.querySelector<HTMLElement>("#moderation-comments-list");
+    if (!panel || !status || !list) return;
+    panel.hidden = !canModerate;
+    if (!canModerate) return;
+    try {
+      const comments = await fetchPage<Comment>("/api/v1/admin/comments?status=PENDING&size=100");
+      list.replaceChildren();
+      if (comments.length === 0) {
+        status.textContent = "There are no comments waiting for review.";
+        return;
+      }
+      status.textContent = `${comments.length} comment(s) waiting for review.`;
+      for (const comment of comments) {
+        const card = document.createElement("article");
+        card.className = "border-border space-y-3 rounded border p-4";
+        const heading = document.createElement("h3");
+        heading.className = "font-semibold";
+        const postUrl = `/posts/${comment.postSlug.split("/").map(encodeURIComponent).join("/")}/`;
+        const postLink = document.createElement("a");
+        postLink.className = "text-accent underline underline-offset-4";
+        postLink.href = postUrl;
+        postLink.textContent = comment.postTitle;
+        heading.append(postLink);
+        const author = document.createElement("p");
+        author.className = "text-muted-foreground text-sm";
+        author.textContent = `${comment.displayName} (@${comment.username})${comment.parentId ? " · reply" : ""}`;
+        const body = document.createElement("p");
+        body.className = "whitespace-pre-wrap break-words text-sm leading-6";
+        body.textContent = comment.body;
+        const actions = document.createElement("div");
+        actions.className = "flex flex-wrap gap-2";
+        actions.append(
+          makeButton("Publish", "comment", comment.id, "PUBLISHED"),
+          makeButton("Reject", "comment", comment.id, "REJECTED")
+        );
+        card.append(heading, author, body, actions);
+        list.append(card);
+      }
+    } catch (error) {
+      status.classList.add("text-red-600");
+      status.textContent = error instanceof Error ? error.message : "Comment queue is unavailable.";
+    }
+  }
+
+  async function loadMessages(canRead: boolean, canUpdate: boolean) {
+    const panel = document.querySelector<HTMLElement>("#moderation-messages");
+    const status = document.querySelector<HTMLElement>("#moderation-messages-status");
+    const list = document.querySelector<HTMLElement>("#moderation-messages-list");
+    if (!panel || !status || !list) return;
+    panel.hidden = !canRead;
+    if (!canRead) return;
+    try {
+      const messages = await fetchPage<Message>("/api/v1/admin/messages?status=NEW&size=100");
+      list.replaceChildren();
+      if (messages.length === 0) {
+        status.textContent = "There are no new guestbook messages.";
+        return;
+      }
+      status.textContent = `${messages.length} new message(s).`;
+      for (const message of messages) {
+        const card = document.createElement("article");
+        card.className = "border-border space-y-3 rounded border p-4";
+        const heading = document.createElement("h3");
+        heading.className = "font-semibold";
+        heading.textContent = message.subject || "Guestbook message";
+        const sender = document.createElement("a");
+        sender.className = "text-accent text-sm underline underline-offset-4";
+        sender.href = `mailto:${message.senderEmail}`;
+        sender.textContent = `${message.senderName} · ${message.senderEmail}`;
+        const body = document.createElement("p");
+        body.className = "whitespace-pre-wrap break-words text-sm leading-6";
+        body.textContent = message.body;
+        card.append(heading, sender, body);
+        if (canUpdate) {
+          const actions = document.createElement("div");
+          actions.className = "flex flex-wrap gap-2";
+          actions.append(
+            makeButton("In progress", "message", message.id, "IN_PROGRESS"),
+            makeButton("Resolve", "message", message.id, "RESOLVED"),
+            makeButton("Mark as spam", "message", message.id, "SPAM")
+          );
+          card.append(actions);
+        }
+        list.append(card);
+      }
+    } catch (error) {
+      status.classList.add("text-red-600");
+      status.textContent = error instanceof Error ? error.message : "Message queue is unavailable.";
+    }
+  }
+
+  function setupModerationActions() {
+    const page = document.querySelector<HTMLElement>("#main-content");
+    if (!page || page.dataset.actionsBound === "true") return;
+    page.dataset.actionsBound = "true";
+    page.addEventListener("click", async event => {
+      const target = event.target;
+      if (!(target instanceof HTMLButtonElement) || !target.dataset.resource) return;
+      const { resource, id, status } = target.dataset;
+      if (!id || !status) return;
+      target.disabled = true;
+      const path = resource === "comment"
+        ? `/api/v1/admin/comments/${id}/status`
+        : `/api/v1/admin/messages/${id}/status`;
+      try {
+        await sendJson(path, "PUT", { status });
+        await setupModerationPage();
+      } catch (error) {
+        const node = document.querySelector<HTMLElement>(
+          resource === "comment" ? "#moderation-comments-status" : "#moderation-messages-status"
+        );
+        if (node) {
+          node.classList.add("text-red-600");
+          node.textContent = error instanceof Error ? error.message : "The status could not be updated.";
+        }
+      } finally {
+        target.disabled = false;
+      }
+    });
+  }
+
+  async function setupModerationPage() {
+    const status = document.querySelector<HTMLElement>("#moderation-status");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#moderation-login-link");
+    if (!status || !loginLink) return;
+    status.classList.remove("text-red-600");
+    status.textContent = "Checking permissions…";
+    loginLink.hidden = true;
+    try {
+      const user = await getSessionUser();
+      if (!user) {
+        status.textContent = "Sign in to open moderation.";
+        loginLink.hidden = false;
+        return;
+      }
+      const permissions = new Set(user.permissions);
+      await Promise.all([
+        loadComments(permissions.has("comment:moderate")),
+        loadMessages(permissions.has("message:read"), permissions.has("message:update")),
+      ]);
+      status.textContent = "Moderation data is current.";
+    } catch (error) {
+      status.classList.add("text-red-600");
+      status.textContent = error instanceof Error ? error.message : "Moderation is unavailable.";
+    }
+  }
+
+  function setupModeration() {
+    setupModerationActions();
+    void setupModerationPage();
+  }
+
+  setupModeration();
+  document.addEventListener("astro:page-load", setupModeration);
+</script>

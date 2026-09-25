@@ -1,0 +1,296 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`User management | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle="User management" class="max-w-app">
+    <p id="users-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Checking permissions…
+    </p>
+    <a
+      id="users-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+
+    <section id="users-workspace" class="mt-8 max-w-xl space-y-8" hidden>
+      <form id="create-user-form" class="border-border space-y-4 rounded border p-4">
+        <h2 class="text-lg font-semibold">Create an account</h2>
+        <div>
+          <label for="new-username" class="mb-1 block text-sm font-medium">Username</label>
+          <input id="new-username" name="username" maxlength="50" autocomplete="off" required class="border-border bg-background w-full rounded border px-3 py-2" />
+        </div>
+        <div>
+          <label for="new-email" class="mb-1 block text-sm font-medium">Email</label>
+          <input id="new-email" name="email" type="email" maxlength="190" autocomplete="off" required class="border-border bg-background w-full rounded border px-3 py-2" />
+        </div>
+        <div>
+          <label for="new-display-name" class="mb-1 block text-sm font-medium">Display name</label>
+          <input id="new-display-name" name="displayName" maxlength="100" autocomplete="off" required class="border-border bg-background w-full rounded border px-3 py-2" />
+        </div>
+        <div>
+          <label for="new-password" class="mb-1 block text-sm font-medium">Temporary password</label>
+          <input id="new-password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required class="border-border bg-background w-full rounded border px-3 py-2" />
+        </div>
+        <button type="submit" class="bg-accent text-accent-foreground rounded px-4 py-2 font-medium hover:opacity-90 disabled:opacity-60">Create USER account</button>
+      </form>
+
+      <section>
+        <h2 class="text-lg font-semibold">Accounts</h2>
+        <div id="users-list" class="mt-4 space-y-4"></div>
+        <nav class="mt-4 flex items-center justify-between" aria-label="User pages">
+          <button id="users-prev" type="button" class="border-border rounded border px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
+          <span id="users-page" class="text-muted-foreground text-sm"></span>
+          <button id="users-next" type="button" class="border-border rounded border px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+        </nav>
+      </section>
+    </section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser, sendJson } from "@/lib/session-api";
+
+  type AdminUser = {
+    id: number;
+    username: string;
+    email: string;
+    displayName: string;
+    status: string;
+    roles: string[];
+    permissions: string[];
+  };
+  type Role = { code: string; name: string; description: string | null };
+  type UserPage = {
+    content: AdminUser[];
+    page: number;
+    totalPages: number;
+    totalElements: number;
+  };
+
+  async function getJson<T>(path: string): Promise<T> {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(problem.detail ?? "The request could not be completed.");
+    }
+    return (await response.json()) as T;
+  }
+
+  let currentPage = 0;
+  let totalPages = 0;
+  let availableRoles: Role[] = [];
+  let canManageRoles = false;
+  let canManageAdminRole = false;
+
+  function setStatus(message: string, error = false) {
+    const node = document.querySelector<HTMLElement>("#users-status");
+    if (!node) return;
+    node.classList.toggle("text-red-600", error);
+    node.classList.toggle("text-muted-foreground", !error);
+    node.textContent = message;
+  }
+
+  function makeAction(label: string, user: AdminUser, status: string) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "border-border rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50";
+    button.textContent = label;
+    button.dataset.userId = String(user.id);
+    button.dataset.actionStatus = status;
+    return button;
+  }
+
+  function renderUser(user: AdminUser) {
+    const card = document.createElement("article");
+    card.className = "border-border space-y-3 rounded border p-4";
+    const heading = document.createElement("h3");
+    heading.className = "font-semibold";
+    heading.textContent = `${user.displayName} (@${user.username})`;
+    const email = document.createElement("p");
+    email.className = "text-muted-foreground text-sm";
+    email.textContent = user.email;
+    const details = document.createElement("p");
+    details.className = "text-sm";
+    details.textContent = `Status: ${user.status} · Roles: ${user.roles.join(", ")}`;
+    const actions = document.createElement("div");
+    actions.className = "flex flex-wrap gap-2";
+    if (user.status === "ACTIVE") {
+      actions.append(makeAction("Disable", user, "DISABLED"), makeAction("Lock", user, "LOCKED"));
+    } else {
+      actions.append(makeAction("Enable", user, "ACTIVE"));
+    }
+    card.append(heading, email, details, actions);
+
+    if (canManageRoles) {
+      const form = document.createElement("form");
+      form.className = "border-border space-y-3 border-t pt-3";
+      form.dataset.roleUserId = String(user.id);
+      const legend = document.createElement("p");
+      legend.className = "text-sm font-medium";
+      legend.textContent = "Roles";
+      const checkboxes = document.createElement("div");
+      checkboxes.className = "flex flex-wrap gap-x-4 gap-y-2";
+      const hasProtectedAdminRole = user.roles.includes("ADMIN") && !canManageAdminRole;
+      for (const role of availableRoles) {
+        if (role.code === "ADMIN" && !canManageAdminRole && !user.roles.includes("ADMIN")) continue;
+        const label = document.createElement("label");
+        label.className = "flex items-center gap-2 text-sm";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = role.code;
+        input.checked = user.roles.includes(role.code);
+        input.disabled = hasProtectedAdminRole;
+        label.append(input, document.createTextNode(role.name));
+        checkboxes.append(label);
+      }
+      const save = document.createElement("button");
+      save.type = "submit";
+      save.disabled = hasProtectedAdminRole;
+      save.className = "border-border rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50";
+      save.textContent = hasProtectedAdminRole ? "ADMIN role requires permission:manage" : "Save roles";
+      form.append(legend, checkboxes, save);
+      card.append(form);
+    }
+    return card;
+  }
+
+  async function loadUsers() {
+    const list = document.querySelector<HTMLElement>("#users-list");
+    const pageLabel = document.querySelector<HTMLElement>("#users-page");
+    const prev = document.querySelector<HTMLButtonElement>("#users-prev");
+    const next = document.querySelector<HTMLButtonElement>("#users-next");
+    if (!list || !pageLabel || !prev || !next) return;
+    const params = new URLSearchParams({ page: String(currentPage), size: "50" });
+    const page = await getJson<UserPage>(`/api/v1/admin/users?${params}`);
+    list.replaceChildren(...page.content.map(renderUser));
+    currentPage = page.page;
+    totalPages = page.totalPages;
+    pageLabel.textContent = `${page.totalElements} account(s) · page ${currentPage + 1} of ${Math.max(totalPages, 1)}`;
+    prev.disabled = currentPage === 0;
+    next.disabled = currentPage + 1 >= totalPages;
+  }
+
+  function setupUserActions() {
+    const workspace = document.querySelector<HTMLElement>("#users-workspace");
+    const createForm = document.querySelector<HTMLFormElement>("#create-user-form");
+    if (!workspace || workspace.dataset.actionsBound === "true") return;
+    workspace.dataset.actionsBound = "true";
+
+    createForm?.addEventListener("submit", async event => {
+      event.preventDefault();
+      const form = event.currentTarget as HTMLFormElement;
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const values = Object.fromEntries(new FormData(form).entries());
+      if (submit) submit.disabled = true;
+      try {
+        await sendJson("/api/v1/admin/users", "POST", values);
+        form.reset();
+        currentPage = 0;
+        setStatus("Account created with the USER role.");
+        await loadUsers();
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Account creation failed.", true);
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+
+    workspace.addEventListener("click", async event => {
+      const target = event.target;
+      if (!(target instanceof HTMLButtonElement) || !target.dataset.userId || !target.dataset.actionStatus) return;
+      target.disabled = true;
+      try {
+        await sendJson(`/api/v1/admin/users/${target.dataset.userId}/status`, "PUT", {
+          status: target.dataset.actionStatus,
+        });
+        await loadUsers();
+        setStatus("Account status updated.");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Account update failed.", true);
+      }
+    });
+
+    workspace.addEventListener("submit", async event => {
+      const target = event.target;
+      if (!(target instanceof HTMLFormElement) || !target.dataset.roleUserId) return;
+      event.preventDefault();
+      const save = target.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const roleCodes = Array.from(target.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'))
+        .map(input => input.value);
+      if (save) save.disabled = true;
+      try {
+        await sendJson(`/api/v1/admin/users/${target.dataset.roleUserId}/roles`, "PUT", { roleCodes });
+        await loadUsers();
+        setStatus("Account roles updated.");
+      } catch (error) {
+        setStatus(error instanceof Error ? error.message : "Role update failed.", true);
+      }
+    });
+
+    document.querySelector("#users-prev")?.addEventListener("click", async () => {
+      if (currentPage > 0) currentPage -= 1;
+      await loadUsers().catch(error => setStatus(error instanceof Error ? error.message : "Users could not be loaded.", true));
+    });
+    document.querySelector("#users-next")?.addEventListener("click", async () => {
+      if (currentPage + 1 < totalPages) currentPage += 1;
+      await loadUsers().catch(error => setStatus(error instanceof Error ? error.message : "Users could not be loaded.", true));
+    });
+  }
+
+  async function setupUserManagement() {
+    const workspace = document.querySelector<HTMLElement>("#users-workspace");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#users-login-link");
+    if (!workspace || !loginLink) return;
+    workspace.hidden = true;
+    loginLink.hidden = true;
+    setStatus("Checking permissions…");
+    try {
+      const user = await getSessionUser();
+      if (!user) {
+        setStatus("Sign in to manage accounts.");
+        loginLink.hidden = false;
+        return;
+      }
+      if (!user.permissions.includes("user:manage") || !user.roles.includes("ADMIN")) {
+        setStatus("This account cannot manage users.", true);
+        return;
+      }
+      canManageRoles = user.permissions.includes("role:manage");
+      canManageAdminRole = user.permissions.includes("permission:manage");
+      if (canManageRoles) availableRoles = await getJson<Role[]>("/api/v1/admin/roles");
+      setupUserActions();
+      workspace.hidden = false;
+      await loadUsers();
+      setStatus("Account list is current.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "User management is unavailable.", true);
+    }
+  }
+
+  setupUserManagement();
+  document.addEventListener("astro:page-load", setupUserManagement);
+</script>

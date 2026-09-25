@@ -1,0 +1,163 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import { useTranslations } from "@/i18n";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const t = useTranslations(locale);
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`${t.pages.accountTitle} | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle={t.pages.accountTitle} class="max-w-app">
+    <p id="account-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Loading account…
+    </p>
+    <a
+      id="account-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+
+    <section
+      id="account-details"
+      class="mt-6 max-w-xl space-y-5"
+      data-login-url={getRelativeLocaleUrl(locale, "login")}
+      hidden
+    >
+      <dl class="grid grid-cols-[max-content_1fr] gap-x-5 gap-y-2 text-sm">
+        <dt class="text-muted-foreground">Display name</dt>
+        <dd id="account-display-name" class="font-medium"></dd>
+        <dt class="text-muted-foreground">Username</dt>
+        <dd id="account-username"></dd>
+        <dt class="text-muted-foreground">Email</dt>
+        <dd id="account-email"></dd>
+        <dt class="text-muted-foreground">Roles</dt>
+        <dd id="account-roles"></dd>
+      </dl>
+
+      <a
+        id="users-link"
+        class="text-accent underline underline-offset-4"
+        href={getRelativeLocaleUrl(locale, "admin/users")}
+        hidden
+      >
+        User management
+      </a>
+
+      <a
+        id="access-link"
+        class="text-accent underline underline-offset-4"
+        href={getRelativeLocaleUrl(locale, "admin/access")}
+        hidden
+      >
+        Role and permission management
+      </a>
+
+      <a
+        id="moderation-link"
+        class="text-accent underline underline-offset-4"
+        href={getRelativeLocaleUrl(locale, "admin/moderation")}
+        hidden
+      >
+        Comment and guestbook moderation
+      </a>
+
+      <button
+        id="logout-button"
+        type="button"
+        class="border-border rounded border px-4 py-2 font-medium hover:bg-muted"
+      >
+        Sign out
+      </button>
+    </section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser, sendJson } from "@/lib/session-api";
+
+  async function setupAccountPage() {
+    const status = document.querySelector<HTMLElement>("#account-status");
+    const details = document.querySelector<HTMLElement>("#account-details");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#account-login-link");
+    if (!status || !details || !loginLink) return;
+
+    status.classList.remove("text-red-600");
+    status.textContent = "Loading account…";
+    details.hidden = true;
+    loginLink.hidden = true;
+    try {
+      const user = await getSessionUser();
+      if (!user) {
+        status.textContent = "Sign in to view your account.";
+        loginLink.hidden = false;
+        return;
+      }
+      document.querySelector("#account-display-name")!.textContent = user.displayName;
+      document.querySelector("#account-username")!.textContent = user.username;
+      document.querySelector("#account-email")!.textContent = user.email;
+      document.querySelector("#account-roles")!.textContent = user.roles.join(", ");
+      const moderationLink = document.querySelector<HTMLAnchorElement>("#moderation-link");
+      const usersLink = document.querySelector<HTMLAnchorElement>("#users-link");
+      if (usersLink) usersLink.hidden = !user.permissions.includes("user:manage");
+      const accessLink = document.querySelector<HTMLAnchorElement>("#access-link");
+      if (accessLink) accessLink.hidden = !user.permissions.includes("permission:manage");
+      if (moderationLink) {
+        moderationLink.hidden = !user.permissions.some(permission =>
+          ["comment:moderate", "message:read"].includes(permission)
+        );
+      }
+      status.textContent = "Your account details are current.";
+      details.hidden = false;
+    } catch (error) {
+      status.classList.add("text-red-600");
+      status.textContent = error instanceof Error ? error.message : "Account is unavailable.";
+    }
+  }
+
+  function setupLogout() {
+    const button = document.querySelector<HTMLButtonElement>("#logout-button");
+    if (!button || button.dataset.bound === "true") return;
+    button.dataset.bound = "true";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        await sendJson("/api/v1/auth/logout", "POST", {});
+        const loginUrl = document.querySelector<HTMLElement>("#account-details")?.dataset.loginUrl;
+        window.location.assign(loginUrl ?? "/login");
+      } catch (error) {
+        const status = document.querySelector<HTMLElement>("#account-status");
+        if (status) {
+          status.classList.add("text-red-600");
+          status.textContent = error instanceof Error ? error.message : "Sign out failed.";
+        }
+        button.disabled = false;
+      }
+    });
+  }
+
+  function setupAccount() {
+    void setupAccountPage();
+    setupLogout();
+  }
+
+  setupAccount();
+  document.addEventListener("astro:page-load", setupAccount);
+</script>
