@@ -1,0 +1,29 @@
+services:
+  mysql:
+    mem_limit: 256m
+    memswap_limit: 256m
+    command:
+      - --innodb-buffer-pool-size=64M
+      - --max-connections=32
+      - --performance-schema=OFF
+      - --table-open-cache=128
+
+  api:
+    mem_limit: 320m
+    memswap_limit: 320m
+    command:
+      - java
+      - -Xms32m
+      - -Xmx128m
+      - -XX:MaxMetaspaceSize=96m
+      - -XX:MaxDirectMemorySize=16m
+      - -XX:ReservedCodeCacheSize=16m
+      - -jar
+      - /app/astro-paper-api.jar
+    environment:
+      ADMIN_BOOTSTRAP_ENABLED: ${ADMIN_BOOTSTRAP_ENABLED:-false}
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-}
+      ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
+      ADMIN_BOOTSTRAP_DISPLAY_NAME: ${ADMIN_BOOTSTRAP_DISPLAY_NAME:-}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}

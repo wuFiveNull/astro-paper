@@ -20,6 +20,13 @@ server:
   address: ${SERVER_ADDRESS:127.0.0.1}
   port: ${SERVER_PORT:8081}
   shutdown: graceful
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
+        same-site: lax
 
 management:
   endpoints:
@@ -38,3 +45,11 @@ management:
 logging:
   level:
     root: INFO
+
+app:
+  bootstrap-admin:
+    enabled: ${ADMIN_BOOTSTRAP_ENABLED:false}
+    username: ${ADMIN_BOOTSTRAP_USERNAME:}
+    email: ${ADMIN_BOOTSTRAP_EMAIL:}
+    display-name: ${ADMIN_BOOTSTRAP_DISPLAY_NAME:}
+    password: ${ADMIN_BOOTSTRAP_PASSWORD:}

@@ -12,6 +12,7 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -53,6 +54,27 @@ public class UserEntity {
     private Set<RoleEntity> roles = new HashSet<>();
 
     protected UserEntity() {
+    }
+
+    public UserEntity(String username, String email, String passwordHash, String displayName, String status) {
+        this.username = username;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.displayName = displayName;
+        this.status = status;
+    }
+
+    public void addRole(RoleEntity role) {
+        this.roles.add(role);
+    }
+
+    public void replaceRoles(Collection<RoleEntity> roles) {
+        this.roles.clear();
+        this.roles.addAll(roles);
+    }
+
+    public void changeStatus(String status) {
+        this.status = status;
     }
 
     public Long getId() { return id; }

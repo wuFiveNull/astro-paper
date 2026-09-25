@@ -12,6 +12,7 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -52,4 +53,9 @@ public class RoleEntity {
     public String getDescription() { return description; }
     public Instant getCreatedAt() { return createdAt; }
     public Set<PermissionEntity> getPermissions() { return permissions; }
+
+    public void replacePermissions(Collection<PermissionEntity> permissions) {
+        this.permissions.clear();
+        this.permissions.addAll(permissions);
+    }
 }

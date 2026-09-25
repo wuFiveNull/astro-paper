@@ -9,6 +9,10 @@ spring:
       ddl-auto: none
   flyway:
     enabled: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
 
 server:
   address: 127.0.0.1

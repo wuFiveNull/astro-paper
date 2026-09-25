@@ -1,6 +1,6 @@
 # AstroPaper API
 
-Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. The Astro site now renders public post pages through its Node SSR adapter and reads these APIs at request time. A separate content preparation tool converts the repository's Markdown/MDX collection into reviewed, insert-only MySQL SQL; authenticated write APIs remain planned work.
+Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, public read APIs, database-backed authentication, and permission-checked account/role management. The Astro site renders public post pages through its Node SSR adapter and reads content APIs at request time. A separate content preparation tool converts the repository's Markdown/MDX collection into reviewed, insert-only MySQL SQL.
 
 ## Requirements
 
@@ -30,6 +30,25 @@ mvn -f backend/pom.xml spring-boot:run
 ```
 
 The process binds to `127.0.0.1:8081` by default. Check `GET /api/v1/health` for process health and `GET /actuator/health` for application readiness, including database connectivity. Set `SERVER_ADDRESS` and `SERVER_PORT` explicitly if the reverse proxy requires different local values.
+
+## Authentication and account provisioning
+
+Authentication uses a server-side HTTP session and an `HttpOnly`, `SameSite=Lax` session cookie. Unsafe requests require a CSRF token: request `GET /api/v1/auth/csrf`, then send its `token` in the header named by `headerName`. Fetch a fresh token after login or logout. Configure `SESSION_COOKIE_SECURE=true` when the browser reaches the site over HTTPS.
+
+- `POST /api/v1/auth/login` authenticates a JSON `username` and `password` and starts a session.
+- `POST /api/v1/auth/logout` ends the session.
+- `GET /api/v1/auth/me` returns the signed-in account, role codes, and permission codes.
+- `POST /api/v1/admin/users` creates an active `USER` account. Only an active account with the `ADMIN` role and `user:manage` permission can create accounts; there is no public registration endpoint.
+- `PUT /api/v1/admin/users/{id}/status` changes an account to `ACTIVE`, `DISABLED`, or `LOCKED`.
+- `PUT /api/v1/admin/users/{id}/roles` replaces an account's roles. Assigning `ADMIN` also requires `permission:manage`.
+- `GET /api/v1/admin/roles` and `GET /api/v1/admin/permissions` return the seeded access model.
+- `PUT /api/v1/admin/roles/{code}/permissions` replaces a non-`ADMIN` role's permissions. Account/access management permissions cannot be assigned to other roles, and the `ADMIN` role cannot be edited.
+
+All account and role operations also check the caller's current database role and permissions in the service layer, so account status and permission changes take effect for existing sessions. The last active administrator cannot be disabled, locked, or stripped of the `ADMIN` role.
+
+The first administrator is created only when the database has no user accounts. For the initial server start, set `ADMIN_BOOTSTRAP_ENABLED=true` plus private `ADMIN_BOOTSTRAP_USERNAME`, `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_DISPLAY_NAME`, and `ADMIN_BOOTSTRAP_PASSWORD` values in the server environment. The password must contain at least 12 characters and no more than 72 UTF-8 bytes. The application stores only its encoded hash and never logs the password. Remove all `ADMIN_BOOTSTRAP_*` values after startup. If any account already exists, bootstrap skips without modifying accounts.
+
+The backend's `ADMIN`, `EDITOR`, and `USER` roles and permission codes are seeded by Flyway. This milestone implements login, logout, current-user lookup, first-admin bootstrap, account status changes, role assignment, permission editing, and account creation. Sessions are held by the single API instance; an API restart signs users out.
 
 ## Public content API
 
@@ -63,11 +82,11 @@ The converter preserves existing route slugs and visible subdirectories, maps `d
 
 The importer has been exercised against the isolated cloud test database: 18 source posts, 15 tags, and 33 post/tag links were inserted, and a repeated run failed on a unique tag key without changing those counts. Production content has not been imported.
 
-No administrator account or sample password is seeded. Bootstrap of the first administrator will be implemented as a deliberate, one-time administrative operation before authentication is enabled. The isolated import test used a disabled test-only author account; it is not a production account.
+No administrator account or sample password is seeded. Use the one-time environment bootstrap described above before importing production articles. The isolated import test used a disabled test-only author account; it is not a production account.
 
 ## Isolated cloud smoke deployment
 
-`deploy/compose.test.yaml` starts a separate MySQL 8.4, API, and Astro SSR stack. MySQL has no published host port; API and website test ports are bound to `127.0.0.1` only. The Compose project does not modify the existing site proxy or port 80.
+`deploy/compose.test.yaml` starts a separate MySQL 8.4, API, and Astro SSR stack. MySQL has no published host port; API and website test ports are bound to `127.0.0.1` only. The Compose project does not modify the existing site proxy or port 80. `deploy/compose.auth-smoke.yaml` is a lower-memory override for testing the API and isolated MySQL without starting/building the website container.
 
 For a server test, copy `target/astro-paper-api.jar`, `deploy/compose.test.yaml`, and `deploy/.env.example` to a private server directory. Create a private `.env` there with distinct random `DB_PASSWORD` and `MYSQL_ROOT_PASSWORD` values, then make the repository source available to the Compose build context and start the stack with:
 
@@ -76,3 +95,12 @@ docker compose --project-name astro-paper-api-test -f compose.test.yaml up -d
 ```
 
 Verify `http://127.0.0.1:18081/api/v1/health`, `http://127.0.0.1:18081/actuator/health`, and `http://127.0.0.1:18080/` from the server. Keep the private `.env` on the server only. The named MySQL volume retains test data across container restarts; do not remove it unless its data is intentionally disposable.
+
+For an API-only authentication smoke test on a memory-constrained server, copy the locally built JAR, `deploy/compose.test.yaml`, and `deploy/compose.auth-smoke.yaml` to a private directory on the server. Configure a new Compose project name, a distinct host port such as `18082`, and new private MySQL credentials in that directory's `.env`. To exercise first-admin initialization, temporarily set the `ADMIN_BOOTSTRAP_*` values there, then run:
+
+```bash
+docker compose --project-name astro-paper-api-auth-smoke \
+  -f compose.test.yaml -f compose.auth-smoke.yaml up -d mysql api
+```
+
+This starts only the isolated MySQL and API services; it skips the Astro image build. The override caps their combined memory at 576 MiB. Check API health and authentication endpoints on `127.0.0.1:18082`, then remove bootstrap secrets from `.env`, recreate the API container, and stop both containers without `-v`. The named test volume can be retained for inspection; production services and their database must not be used for this smoke test.

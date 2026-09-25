@@ -1,5 +1,13 @@
 package com.astropaper.api.publiccontent;
 
+import com.astropaper.api.auth.InvalidCredentialsException;
+import com.astropaper.api.auth.AccountNotActiveException;
+import com.astropaper.api.auth.AdminResourceNotFoundException;
+import com.astropaper.api.auth.ForbiddenRoleChangeException;
+import com.astropaper.api.auth.InvalidAccessConfigurationException;
+import com.astropaper.api.auth.LastAdministratorException;
+import com.astropaper.api.auth.UnknownAccessCodeException;
+import com.astropaper.api.auth.UserAlreadyExistsException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +20,62 @@ public class ApiExceptionHandler {
     public ProblemDetail handlePostNotFound(PostNotFoundException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "The requested post does not exist.");
         problem.setTitle("Post not found");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials() {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
+        problem.setTitle("Invalid credentials");
+        return problem;
+    }
+
+    @ExceptionHandler(AccountNotActiveException.class)
+    public ProblemDetail handleInactiveAccount() {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "This account is not available.");
+        problem.setTitle("Authentication required");
+        return problem;
+    }
+
+    @ExceptionHandler(UserAlreadyExistsException.class)
+    public ProblemDetail handleExistingUser(UserAlreadyExistsException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Account already exists");
+        return problem;
+    }
+
+    @ExceptionHandler(AdminResourceNotFoundException.class)
+    public ProblemDetail handleAdminResourceNotFound(AdminResourceNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Account or access resource not found");
+        return problem;
+    }
+
+    @ExceptionHandler(UnknownAccessCodeException.class)
+    public ProblemDetail handleUnknownAccessCode(UnknownAccessCodeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid access configuration");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidAccessConfigurationException.class)
+    public ProblemDetail handleInvalidAccessConfiguration(InvalidAccessConfigurationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid access configuration");
+        return problem;
+    }
+
+    @ExceptionHandler(ForbiddenRoleChangeException.class)
+    public ProblemDetail handleForbiddenRoleChange() {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, "Only a permission administrator can assign the ADMIN role.");
+        problem.setTitle("Forbidden");
+        return problem;
+    }
+
+    @ExceptionHandler(LastAdministratorException.class)
+    public ProblemDetail handleLastAdministrator() {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "At least one active administrator must remain.");
+        problem.setTitle("Last administrator cannot be removed");
         return problem;
     }
 }
