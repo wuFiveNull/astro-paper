@@ -36,9 +36,10 @@ public class PublicPostController {
         return publicContentService.listPosts(page, size, q);
     }
 
-    @GetMapping("/posts/{slug}")
-    public PostDetailDto getPost(@PathVariable @Size(max = 180) String slug) {
-        return publicContentService.getPost(slug);
+    @GetMapping("/posts/{*slug}")
+    public PostDetailDto getPost(@PathVariable("slug") @Size(max = 180) String slug) {
+        String normalizedSlug = slug.startsWith("/") ? slug.substring(1) : slug;
+        return publicContentService.getPost(normalizedSlug);
     }
 
     @GetMapping("/tags")

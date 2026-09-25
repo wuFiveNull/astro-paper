@@ -55,10 +55,10 @@ interface FeaturesConfig {
       }
     | { enabled: false };
   /**
-   * Search provider. "pagefind" ships in the base template.
+   * Search provider. "database" queries the Spring Boot content API.
    * Set to false to disable search entirely.
    */
-  search?: "pagefind" | false;
+  search?: "database" | false;
 }
 
 interface SocialLink {

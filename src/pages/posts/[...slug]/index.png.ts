@@ -1,30 +1,29 @@
 import type { APIRoute } from "astro";
-import { getCollection } from "astro:content";
 import { fontData, experimental_getFontFileURL } from "astro:assets";
 import satori from "satori";
 import sharp from "sharp";
 import { getFontPathByWeight } from "@/utils/getFontPathByWeight";
-import { getPostSlug } from "@/utils/getPostPaths";
+import { BlogApiError, getPost } from "@/lib/blog-api";
 import config from "@/config";
 
-export async function getStaticPaths() {
-  if (!config.features.dynamicOgImage) {
-    return [];
-  }
-
-  const posts = await getCollection("posts").then(p =>
-    p.filter(({ data }) => !data.draft && !data.ogImage)
-  );
-
-  return posts.map(post => ({
-    params: { slug: getPostSlug(post.id, post.filePath) },
-    props: post,
-  }));
-}
-
-export const GET: APIRoute = async ({ props, url }) => {
+export const GET: APIRoute = async ({ params, url }) => {
   if (!config.features.dynamicOgImage) {
     return new Response(null, { status: 404, statusText: "Not found" });
+  }
+
+  const slug = params.slug;
+  if (!slug) {
+    return new Response(null, { status: 404, statusText: "Not found" });
+  }
+
+  let post;
+  try {
+    post = await getPost(slug);
+  } catch (error) {
+    if (error instanceof BlogApiError && error.status === 404) {
+      return new Response(null, { status: 404, statusText: "Not found" });
+    }
+    throw error;
   }
 
   const fonts = fontData["--font-google-sans-code"];
@@ -110,7 +109,7 @@ export const GET: APIRoute = async ({ props, url }) => {
                           maxHeight: "84%",
                           overflow: "hidden",
                         },
-                        children: props.data.title,
+                        children: post.title,
                       },
                     },
                     {
@@ -143,7 +142,7 @@ export const GET: APIRoute = async ({ props, url }) => {
                                       overflow: "hidden",
                                       fontWeight: "bold",
                                     },
-                                    children: props.data.author,
+                                    children: post.author,
                                   },
                                 },
                               ],

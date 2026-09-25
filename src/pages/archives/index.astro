@@ -1,13 +1,12 @@
 ---
 import { getRelativeLocaleUrl } from "astro:i18n";
-import { getCollection } from "astro:content";
 import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Breadcrumb from "@/components/Breadcrumb.astro";
 import Main from "@/components/Main.astro";
 import Footer from "@/components/Footer.astro";
 import Card from "@/components/Card.astro";
-import { postFilter } from "@/utils/postFilter";
+import { getAllPosts, sortPosts } from "@/lib/blog-api";
 import { getPostsByGroupCondition } from "./_utils/getPostsByGroupCondition";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
@@ -22,8 +21,9 @@ if (!config.features.showArchives && notFoundUrl) {
 
 const t = useTranslations(locale);
 
-const posts = await getCollection("posts");
-const filteredPosts = posts.filter(postFilter);
+export const prerender = false;
+
+const filteredPosts = sortPosts(await getAllPosts());
 const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
 ---
 
@@ -36,7 +36,7 @@ const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
     {
       Object.entries(
         getPostsByGroupCondition(filteredPosts, post =>
-          post.data.pubDatetime.getFullYear()
+          new Date(post.pubDatetime).getFullYear()
         )
       )
         .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
@@ -47,7 +47,7 @@ const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
             {Object.entries(
               getPostsByGroupCondition(
                 yearGroup,
-                post => post.data.pubDatetime.getMonth() + 1
+                post => new Date(post.pubDatetime).getMonth() + 1
               )
             )
               .sort(([monthA], [monthB]) => Number(monthB) - Number(monthA))
@@ -68,10 +68,12 @@ const monthFormatter = new Intl.DateTimeFormat(locale, { month: "long" });
                       .sort(
                         (a, b) =>
                           Math.floor(
-                            new Date(b.data.pubDatetime).getTime() / 1000
+                            new Date(b.modDatetime ?? b.pubDatetime).getTime() /
+                              1000
                           ) -
                           Math.floor(
-                            new Date(a.data.pubDatetime).getTime() / 1000
+                            new Date(a.modDatetime ?? a.pubDatetime).getTime() /
+                              1000
                           )
                       )
                       .map(data => (

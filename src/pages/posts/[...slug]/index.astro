@@ -1,12 +1,19 @@
 ---
-import { type CollectionEntry, getCollection, render } from "astro:content";
 import PostLayout from "@/layouts/PostLayout.astro";
 import Header from "@/components/Header.astro";
 import Footer from "@/components/Footer.astro";
 import Datetime from "@/components/Datetime.astro";
 import Tag from "@/components/Tag.astro";
-import { getPostSlug, getPostUrl } from "@/utils/getPostPaths";
-import { getSortedPosts } from "@/utils/getSortedPosts";
+import {
+  BlogApiError,
+  getAllPosts,
+  getPost,
+  publicPostUrl,
+  sortPosts,
+} from "@/lib/blog-api";
+import type { PostDetail } from "@/lib/blog-api";
+import { renderMarkdown } from "@/lib/markdown";
+import { resolveDefaultOgImagePath } from "@/utils/resolveDefaultOgImagePath";
 import { slugifyStr } from "@/utils/slugify";
 import { toTransitionName } from "@/utils/toTransitionName";
 import EditPost from "./_components/EditPost.astro";
@@ -16,93 +23,80 @@ import BackToTopButton from "./_components/BackToTopButton.astro";
 import AdjacentPostNav from "./_components/AdjacentPostNav.astro";
 import config from "@/config";
 
-export async function getStaticPaths() {
-  const posts = await getCollection("posts");
-  const sortedPosts = getSortedPosts(posts);
-
-  return sortedPosts.map((post, index) => ({
-    params: { slug: getPostSlug(post.id, post.filePath) },
-    props: {
-      post,
-      // sortedPosts is newest-first, so "older" (prev) is a higher index
-      // and "newer" (next) is a lower index.
-      prevPost:
-        index < sortedPosts.length - 1
-          ? {
-              id: sortedPosts[index + 1].id,
-              title: sortedPosts[index + 1].data.title,
-              filePath: sortedPosts[index + 1].filePath,
-            }
-          : null,
-      nextPost:
-        index > 0
-          ? {
-              id: sortedPosts[index - 1].id,
-              title: sortedPosts[index - 1].data.title,
-              filePath: sortedPosts[index - 1].filePath,
-            }
-          : null,
-    },
-  }));
-}
+export const prerender = false;
 
 type AdjacentPost = {
-  id: string;
+  slug: string;
   title: string;
-  filePath: string | undefined;
 } | null;
 
-type Props = {
-  post: CollectionEntry<"posts">;
-  prevPost: AdjacentPost;
-  nextPost: AdjacentPost;
-};
+const slug = Astro.params.slug;
+if (!slug) {
+  return Astro.rewrite(new URL("/404", Astro.url));
+}
+const normalizedSlug = slug.replace(/^\/+|\/+$/g, "");
+if (/^\d+$/.test(normalizedSlug)) {
+  return Astro.rewrite(new URL(`/posts/page/${normalizedSlug}`, Astro.url));
+}
 
-const { post, prevPost, nextPost } = Astro.props;
-const locale = Astro.currentLocale ?? config.site.lang;
+let post: PostDetail;
+try {
+  post = await getPost(slug);
+} catch (error) {
+  if (error instanceof BlogApiError && error.status === 404) {
+    return Astro.rewrite(new URL("/404", Astro.url));
+  }
+  throw error;
+}
+
+const sortedPosts = sortPosts(await getAllPosts());
+const currentIndex = sortedPosts.findIndex(item => item.slug === post.slug);
+const prevPost: AdjacentPost =
+  currentIndex >= 0 && currentIndex < sortedPosts.length - 1
+    ? {
+        slug: sortedPosts[currentIndex + 1].slug,
+        title: sortedPosts[currentIndex + 1].title,
+      }
+    : null;
+const nextPost: AdjacentPost =
+  currentIndex > 0
+    ? {
+        slug: sortedPosts[currentIndex - 1].slug,
+        title: sortedPosts[currentIndex - 1].title,
+      }
+    : null;
 
 const {
   title,
   description,
-  ogImage: initOgImage,
+  ogImage,
   canonicalURL,
   pubDatetime,
   modDatetime,
   timezone,
   tags,
   hideEditPost,
-} = post.data;
+  contentMarkdown,
+} = post;
 
-const { Content } = await render(post);
-
-let ogImageUrl: string | undefined;
-
-if (typeof initOgImage === "string") {
-  ogImageUrl = initOgImage;
-} else if (initOgImage?.src) {
-  ogImageUrl = initOgImage.src;
-}
-
-if (!ogImageUrl && config.features.dynamicOgImage) {
-  const postUrl = getPostUrl(post.id, post.filePath, locale).replace(
-    /\/+$/,
-    ""
-  );
-  ogImageUrl = `${postUrl}/index.png`;
-}
-
-const ogImage = ogImageUrl
-  ? new URL(ogImageUrl, Astro.url.origin).href
-  : undefined;
+const renderedMarkdown = await renderMarkdown(contentMarkdown);
+const postOgImage =
+  ogImage ??
+  (config.features.dynamicOgImage
+    ? `${publicPostUrl(post.slug, config.site.lang).replace(/\/+$/, "")}/index.png`
+    : resolveDefaultOgImagePath(config));
+const resolvedOgImage = new URL(postOgImage, Astro.url.origin).href;
+const hideSourceEditLink = true;
 ---
 
 <PostLayout
   title={`${title} | ${config.site.title}`}
   description={description}
-  ogImage={ogImage}
-  canonicalURL={canonicalURL}
-  pubDatetime={pubDatetime}
-  modDatetime={modDatetime}
+  ogImage={resolvedOgImage}
+  canonicalURL={canonicalURL ?? undefined}
+  author={post.author}
+  pubDatetime={new Date(pubDatetime)}
+  modDatetime={modDatetime ? new Date(modDatetime) : null}
 >
   <Header />
 
@@ -111,27 +105,39 @@ const ogImage = ogImageUrl
   <main
     id="main-content"
     class:list={["app-layout", { "mt-8": !config.features.showBackButton }]}
-    data-pagefind-body
   >
     <h1
-      style={{ viewTransitionName: toTransitionName(post.id) }}
+      style={{ viewTransitionName: toTransitionName(post.slug) }}
       class="text-accent inline-block text-2xl font-bold sm:text-3xl"
     >
       {title}
     </h1>
 
     <div class="my-2 flex items-center gap-2">
-      <Datetime {pubDatetime} {modDatetime} {timezone} size="lg" />
+      <Datetime
+        {pubDatetime}
+        {modDatetime}
+        timezone={timezone ?? undefined}
+        size="lg"
+      />
       <span
         aria-hidden="true"
         class:list={[
           "text-muted-foreground max-sm:hidden",
-          { hidden: !config.features.editPost?.enabled || hideEditPost },
+          {
+            hidden:
+              !config.features.editPost?.enabled ||
+              hideEditPost ||
+              hideSourceEditLink,
+          },
         ]}
       >
         |
       </span>
-      <EditPost {hideEditPost} {post} class="max-sm:hidden" />
+      <EditPost
+        hideEditPost={hideEditPost || hideSourceEditLink}
+        class="max-sm:hidden"
+      />
     </div>
 
     <article
@@ -142,12 +148,15 @@ const ogImage = ogImageUrl
         "prose-pre:bg-(--shiki-light-bg) dark:prose-pre:bg-(--shiki-dark-bg)",
       ]}
     >
-      <Content />
+      <Fragment set:html={renderedMarkdown} />
     </article>
 
     <hr class="my-8 border-dashed" />
 
-    <EditPost class="sm:hidden" {hideEditPost} {post} />
+    <EditPost
+      class="sm:hidden"
+      hideEditPost={hideEditPost || hideSourceEditLink}
+    />
 
     <BackToTopButton />
 

@@ -1,19 +1,19 @@
 ---
-import type { CollectionEntry } from "astro:content";
 import IconEdit from "@/assets/icons/IconEdit.svg";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
 type Props = {
-  hideEditPost?: CollectionEntry<"posts">["data"]["hideEditPost"];
+  hideEditPost?: boolean;
   class?: string;
-  post: CollectionEntry<"posts">;
+  sourcePath?: string;
 };
 
-const { hideEditPost, post, class: className = "" } = Astro.props;
+const { hideEditPost, sourcePath, class: className = "" } = Astro.props;
 
 const editPost = config.features.editPost;
-const href = editPost.enabled ? `${editPost.url}${post.filePath}` : "";
+const href =
+  editPost.enabled && sourcePath ? `${editPost.url}${sourcePath}` : "";
 const showEditPost = editPost.enabled && !hideEditPost && href.trim() !== "";
 
 const t = useTranslations(Astro.currentLocale);

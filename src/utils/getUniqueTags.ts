@@ -1,4 +1,4 @@
-import type { CollectionEntry } from "astro:content";
+import type { PostSummary } from "@/lib/blog-api";
 import { postFilter } from "./postFilter";
 import { slugifyStr } from "./slugify";
 
@@ -14,10 +14,10 @@ type Tag = {
  * - `tag` is the slug used in URLs; `tagName` is the original label for display
  * - Uniqueness is based on the slug (so differently-cased labels collapse)
  */
-export function getUniqueTags(posts: CollectionEntry<"posts">[]) {
+export function getUniqueTags(posts: PostSummary[]) {
   const tags: Tag[] = posts
     .filter(postFilter)
-    .flatMap(post => post.data.tags)
+    .flatMap(post => post.tags)
     .map(tag => ({ tag: slugifyStr(tag), tagName: tag }))
     .filter(
       (value, index, self) =>

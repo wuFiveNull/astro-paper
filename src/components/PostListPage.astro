@@ -1,0 +1,36 @@
+---
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Card from "@/components/Card.astro";
+import Footer from "@/components/Footer.astro";
+import Pagination from "@/components/Pagination.astro";
+import type { PaginationState, PostSummary } from "@/lib/blog-api";
+
+type Props = {
+  title: string;
+  pageTitle: string;
+  pageDesc: string;
+  posts: PostSummary[];
+  page: PaginationState;
+};
+
+const { title, pageTitle, pageDesc, posts, page } = Astro.props;
+---
+
+<Layout {title}>
+  <Header />
+
+  <Breadcrumb />
+
+  <Main {pageTitle} {pageDesc}>
+    <ul>
+      {posts.map(post => <Card {...post} />)}
+    </ul>
+  </Main>
+
+  <Pagination {page} />
+
+  <Footer noMarginTop={page.lastPage > 1} />
+</Layout>

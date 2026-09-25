@@ -1,6 +1,5 @@
 ---
-import { getCollection } from "astro:content";
-import type { GetStaticPathsOptions } from "astro";
+import { getRelativeLocaleUrl } from "astro:i18n";
 import Layout from "@/layouts/Layout.astro";
 import Header from "@/components/Header.astro";
 import Main from "@/components/Main.astro";
@@ -8,33 +7,40 @@ import Breadcrumb from "@/components/Breadcrumb.astro";
 import Card from "@/components/Card.astro";
 import Footer from "@/components/Footer.astro";
 import Pagination from "@/components/Pagination.astro";
-import { getUniqueTags } from "@/utils/getUniqueTags";
-import { getSortedPosts } from "@/utils/getSortedPosts";
-import { slugifyAll } from "@/utils/slugify";
+import { createPagination, getPostsByTag, getTags } from "@/lib/blog-api";
 import { useTranslations } from "@/i18n";
 import config from "@/config";
 
-export async function getStaticPaths({ paginate }: GetStaticPathsOptions) {
-  const posts = await getCollection("posts", ({ data }) => !data.draft);
-  const tags = getUniqueTags(posts);
-
-  return tags.flatMap(({ tag, tagName }) => {
-    const tagPosts = getSortedPosts(
-      posts.filter(({ data }) => slugifyAll(data.tags).includes(tag))
-    );
-
-    return paginate(tagPosts, {
-      params: { tag },
-      props: { tagName },
-      pageSize: config.posts.perPage,
-    });
-  });
-}
-
-const { page, tagName } = Astro.props;
+export const prerender = false;
 
 const locale = Astro.currentLocale ?? config.site.lang;
+const tagSlug = Astro.params.tag;
+const rawPage = Astro.params.page ?? "1";
+if (!tagSlug || !/^\d+$/.test(rawPage) || Number(rawPage) < 1) {
+  return Astro.rewrite(getRelativeLocaleUrl(locale, "404"));
+}
+
+const currentPage = Number(rawPage);
 const t = useTranslations(locale);
+const [tags, response] = await Promise.all([
+  getTags(),
+  getPostsByTag(tagSlug, currentPage - 1, config.posts.perPage),
+]);
+const tag = tags.find(item => item.slug === tagSlug);
+if (!tag || (response.totalPages > 0 && currentPage > response.totalPages)) {
+  return Astro.rewrite(getRelativeLocaleUrl(locale, "404"));
+}
+
+const tagName = tag.name;
+const page = createPagination(
+  currentPage,
+  Math.max(response.totalPages, 1),
+  pageNumber =>
+    getRelativeLocaleUrl(
+      locale,
+      pageNumber === 1 ? `tags/${tagSlug}` : `tags/${tagSlug}/${pageNumber}`
+    )
+);
 ---
 
 <Layout title={`${t.pages.tagTitle}: ${tagName} | ${config.site.title}`}>
@@ -47,7 +53,7 @@ const t = useTranslations(locale);
     pageDesc={`${t.pages.tagDesc} "${tagName}".`}
   >
     <ul>
-      {page.data.map(data => <Card {...data} />)}
+      {response.content.map(post => <Card {...post} />)}
     </ul>
   </Main>
 

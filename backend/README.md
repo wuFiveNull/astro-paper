@@ -1,6 +1,6 @@
 # AstroPaper API
 
-Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. Astro pages still use the static content collection until the SSR integration and Markdown import milestones are implemented.
+Spring Boot backend for the AstroPaper blog. It provides health checks, Flyway-managed MySQL schema, JPA mappings, and public read APIs for published posts, tags, tag filtering, and search. The Astro site now renders public post pages through its Node SSR adapter and reads these APIs at request time. The database Markdown importer and authenticated write APIs remain planned work.
 
 ## Requirements
 
@@ -45,12 +45,12 @@ No administrator account or sample password is seeded. Bootstrap of the first ad
 
 ## Isolated cloud smoke deployment
 
-`deploy/compose.test.yaml` starts a separate MySQL 8.4 and API stack. MySQL has no published host port; the API port is bound to `127.0.0.1` only. The Compose project does not modify the existing site proxy or port 80.
+`deploy/compose.test.yaml` starts a separate MySQL 8.4, API, and Astro SSR stack. MySQL has no published host port; API and website test ports are bound to `127.0.0.1` only. The Compose project does not modify the existing site proxy or port 80.
 
-For a server test, copy `target/astro-paper-api.jar`, `deploy/compose.test.yaml`, and `deploy/.env.example` to a private server directory. Create a private `.env` there with distinct random `DB_PASSWORD` and `MYSQL_ROOT_PASSWORD` values, then start the stack with:
+For a server test, copy `target/astro-paper-api.jar`, `deploy/compose.test.yaml`, and `deploy/.env.example` to a private server directory. Create a private `.env` there with distinct random `DB_PASSWORD` and `MYSQL_ROOT_PASSWORD` values, then make the repository source available to the Compose build context and start the stack with:
 
 ```bash
 docker compose --project-name astro-paper-api-test -f compose.test.yaml up -d
 ```
 
-Verify `http://127.0.0.1:18081/api/v1/health` and `http://127.0.0.1:18081/actuator/health` from the server. Keep the private `.env` on the server only. The named MySQL volume retains test data across container restarts; do not remove it unless its data is intentionally disposable.
+Verify `http://127.0.0.1:18081/api/v1/health`, `http://127.0.0.1:18081/actuator/health`, and `http://127.0.0.1:18080/` from the server. Keep the private `.env` on the server only. The named MySQL volume retains test data across container restarts; do not remove it unless its data is intentionally disposable.

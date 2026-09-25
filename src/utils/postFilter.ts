@@ -1,4 +1,4 @@
-import type { CollectionEntry } from "astro:content";
+import type { PostSummary } from "@/lib/blog-api";
 import config from "@/config";
 
 /**
@@ -8,9 +8,9 @@ import config from "@/config";
  * - In production, excludes scheduled posts until `pubDatetime` minus the configured margin
  * - In dev, always shows non-draft posts to make authoring easier
  */
-export function postFilter({ data }: CollectionEntry<"posts">) {
+export function postFilter({ pubDatetime }: PostSummary) {
   const isPublishTimePassed =
     Date.now() >
-    new Date(data.pubDatetime).getTime() - config.posts.scheduledPostMargin;
-  return !data.draft && (import.meta.env.DEV || isPublishTimePassed);
+    new Date(pubDatetime).getTime() - config.posts.scheduledPostMargin;
+  return import.meta.env.DEV || isPublishTimePassed;
 }
