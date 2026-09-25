@@ -8,11 +8,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/health")
 public class HealthController {
 
-    @GetMapping
-    public HealthResponse health() {
-        return new HealthResponse("UP", "astro-paper-api");
+    private final HealthService healthService;
+
+    public HealthController(HealthService healthService) {
+        this.healthService = healthService;
     }
 
-    public record HealthResponse(String status, String service) {
+    @GetMapping
+    public HealthResponseDto health() {
+        return healthService.getHealth();
     }
 }
