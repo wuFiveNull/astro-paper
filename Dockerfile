@@ -1,5 +1,5 @@
 # Build the Astro server-rendered site.
-FROM node:lts-alpine AS base
+FROM node:24-alpine AS base
 WORKDIR /app
 
 # Install pnpm
@@ -13,7 +13,7 @@ RUN pnpm run build
 RUN pnpm prune --prod
 
 # Runtime stage for the Astro standalone Node server.
-FROM node:lts-alpine AS runtime
+FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV HOST=0.0.0.0
 ENV PORT=4321
