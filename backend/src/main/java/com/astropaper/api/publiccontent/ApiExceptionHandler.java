@@ -8,6 +8,9 @@ import com.astropaper.api.auth.InvalidAccessConfigurationException;
 import com.astropaper.api.auth.LastAdministratorException;
 import com.astropaper.api.auth.UnknownAccessCodeException;
 import com.astropaper.api.auth.UserAlreadyExistsException;
+import com.astropaper.api.articles.ArticleConflictException;
+import com.astropaper.api.articles.ArticleOwnershipException;
+import com.astropaper.api.articles.InvalidArticleRequestException;
 import com.astropaper.api.interactions.InvalidCommentParentException;
 import com.astropaper.api.interactions.InvalidInteractionStatusException;
 import org.springframework.http.HttpStatus;
@@ -92,6 +95,27 @@ public class ApiExceptionHandler {
     public ProblemDetail handleInvalidCommentParent(InvalidCommentParentException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
         problem.setTitle("Invalid reply target");
+        return problem;
+    }
+
+    @ExceptionHandler(ArticleConflictException.class)
+    public ProblemDetail handleArticleConflict(ArticleConflictException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Article conflict");
+        return problem;
+    }
+
+    @ExceptionHandler(ArticleOwnershipException.class)
+    public ProblemDetail handleArticleOwnership(ArticleOwnershipException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
+        problem.setTitle("Forbidden");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidArticleRequestException.class)
+    public ProblemDetail handleInvalidArticleRequest(InvalidArticleRequestException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid article request");
         return problem;
     }
 }

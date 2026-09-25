@@ -13,6 +13,10 @@ public interface TagRepository extends JpaRepository<TagEntity, Long> {
 
     Optional<TagEntity> findBySlug(String slug);
 
+    Optional<TagEntity> findByNameIgnoreCase(String name);
+
+    List<TagEntity> findAllByOrderByNameAsc();
+
     @Query(value = """
         select t.slug as slug, t.name as name, count(p.id) as postCount
         from tags t

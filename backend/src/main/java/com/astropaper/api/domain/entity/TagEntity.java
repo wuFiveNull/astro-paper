@@ -24,6 +24,11 @@ public class TagEntity {
     protected TagEntity() {
     }
 
+    public TagEntity(String slug, String name) {
+        this.slug = slug;
+        this.name = name;
+    }
+
     public Long getId() { return id; }
     public String getSlug() { return slug; }
     public String getName() { return name; }

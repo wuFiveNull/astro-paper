@@ -12,6 +12,33 @@ import java.util.Optional;
 
 public interface PostRepository extends JpaRepository<PostEntity, Long> {
 
+    @Query(
+        value = """
+            select p from PostEntity p
+            where (:authorId is null or p.author.id = :authorId)
+              and (:status is null or p.status = :status)
+              and (:term is null
+                   or lower(p.slug) like lower(concat('%', :term, '%'))
+                   or lower(p.title) like lower(concat('%', :term, '%'))
+                   or lower(p.description) like lower(concat('%', :term, '%')))
+            """,
+        countQuery = """
+            select count(p) from PostEntity p
+            where (:authorId is null or p.author.id = :authorId)
+              and (:status is null or p.status = :status)
+              and (:term is null
+                   or lower(p.slug) like lower(concat('%', :term, '%'))
+                   or lower(p.title) like lower(concat('%', :term, '%'))
+                   or lower(p.description) like lower(concat('%', :term, '%')))
+            """
+    )
+    Page<PostEntity> findManagementPosts(
+        @Param("authorId") Long authorId,
+        @Param("status") String status,
+        @Param("term") String term,
+        Pageable pageable
+    );
+
     Page<PostEntity> findAllByStatusAndPublishedAtLessThanEqualOrderByPublishedAtDesc(
         String status,
         Instant publishedAt,

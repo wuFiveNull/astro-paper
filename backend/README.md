@@ -62,6 +62,17 @@ Only an active administrator with `user:manage` can list accounts or create them
 
 Post metadata preserves the AstroPaper frontmatter names where practical (`pubDatetime`, `modDatetime`, `canonicalURL`, `ogImage`, `hideEditPost`). V3 adds storage for those fields. The API stores and renders Markdown; it does not execute database MDX.
 
+## Article management API
+
+- `GET /api/v1/admin/posts?status=DRAFT&q=keyword&page=0&size=20` lists drafts, published posts, or archived posts. `status` and `q` are optional; page size is limited to 100.
+- `GET /api/v1/admin/posts/{id}` returns the article fields and Markdown body for editing.
+- `POST /api/v1/admin/posts` creates a draft. Send `slug`, `title`, `description`, and `contentMarkdown`; cover image, displayed author, timezone, featured flag, canonical URL, OG image, hidden edit link, and tag names are optional.
+- `PUT /api/v1/admin/posts/{id}` updates article content and metadata without changing its status.
+- `PUT /api/v1/admin/posts/{id}/status` accepts `DRAFT`, `PUBLISHED`, or `ARCHIVED`. Publishing requires `post:publish`; archiving requires `post:delete`; moving an article back to draft requires `post:update`. Archived content is retained, not hard-deleted.
+- `GET /api/v1/admin/tags` lists tags available to article editors. Saving an article reuses tags by name and creates missing tags.
+
+Every operation requires an active session and the matching permission. Editors are scoped to their own authored articles for listing, reading, editing, publishing, and archiving; administrators can manage all articles. The page uses the existing AstroPaper layout and accepts Markdown source, not executable MDX.
+
 ## Comment and guestbook API
 
 - `GET /api/v1/comments?postSlug={slug}&page=0&size=50` returns only published comments for a published article. It exposes the author's display name, not email.

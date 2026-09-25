@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -85,6 +86,51 @@ public class PostEntity {
     private Set<TagEntity> tags = new HashSet<>();
 
     protected PostEntity() {
+    }
+
+    public PostEntity(UserEntity author) {
+        this.author = author;
+        this.status = "DRAFT";
+    }
+
+    public void updateContent(
+        String slug,
+        String title,
+        String description,
+        String contentMarkdown,
+        String coverImageUrl,
+        String authorName,
+        String timezone,
+        boolean featured,
+        String canonicalUrl,
+        String ogImageUrl,
+        boolean hideEditPost,
+        Collection<TagEntity> tags
+    ) {
+        this.slug = slug;
+        this.title = title;
+        this.description = description;
+        this.contentMarkdown = contentMarkdown;
+        this.coverImageUrl = coverImageUrl;
+        this.authorName = authorName;
+        this.timezone = timezone;
+        this.featured = featured;
+        this.canonicalUrl = canonicalUrl;
+        this.ogImageUrl = ogImageUrl;
+        this.hideEditPost = hideEditPost;
+        this.tags.clear();
+        this.tags.addAll(tags);
+        this.modifiedAt = Instant.now();
+    }
+
+    public void changeStatus(String status) {
+        this.status = status;
+        if ("DRAFT".equals(status)) {
+            this.publishedAt = null;
+        } else if ("PUBLISHED".equals(status) && this.publishedAt == null) {
+            this.publishedAt = Instant.now();
+        }
+        this.modifiedAt = Instant.now();
     }
 
     public Long getId() { return id; }

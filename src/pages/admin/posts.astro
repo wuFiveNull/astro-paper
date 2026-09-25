@@ -1,0 +1,466 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`Article management | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle="Article management" class="max-w-app">
+    <p id="posts-admin-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Checking permissions…
+    </p>
+    <a
+      id="posts-admin-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+
+    <section id="posts-admin-workspace" class="mt-8 space-y-10" hidden>
+      <button
+        id="new-post-button"
+        type="button"
+        class="bg-accent text-accent-foreground w-fit rounded px-4 py-2 text-sm font-medium hover:opacity-90"
+        hidden
+      >
+        New article
+      </button>
+      <section id="post-list-panel" hidden>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-xl font-semibold">Articles</h2>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <label for="posts-status-filter" class="text-sm">Status</label>
+          <select id="posts-status-filter" class="border-border bg-background rounded border px-3 py-2 text-sm">
+            <option value="">All statuses</option>
+            <option value="DRAFT">Draft</option>
+            <option value="PUBLISHED">Published</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
+          <label for="posts-search" class="sr-only">Search articles</label>
+          <input
+            id="posts-search"
+            type="search"
+            maxlength="100"
+            placeholder="Search title or slug"
+            class="border-border bg-background min-w-48 rounded border px-3 py-2 text-sm"
+          />
+        </div>
+        <p id="posts-list-status" class="text-muted-foreground mt-3 text-sm" role="status"></p>
+        <div id="posts-list" class="mt-4 space-y-4"></div>
+        <nav class="mt-5 flex items-center justify-between" aria-label="Article pages">
+          <button id="posts-prev" type="button" class="border-border rounded border px-3 py-1.5 text-sm disabled:opacity-50">Previous</button>
+          <span id="posts-page" class="text-muted-foreground text-sm"></span>
+          <button id="posts-next" type="button" class="border-border rounded border px-3 py-1.5 text-sm disabled:opacity-50">Next</button>
+        </nav>
+      </section>
+
+      <section id="post-editor-panel" class="border-border space-y-5 rounded border p-4 sm:p-6" hidden>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="post-editor-heading" class="text-xl font-semibold">New article</h2>
+          <button id="cancel-post-edit" type="button" class="border-border rounded border px-3 py-1.5 text-sm hover:bg-muted">Cancel</button>
+        </div>
+        <form id="post-editor-form" class="space-y-5">
+          <input id="post-id" type="hidden" />
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="post-slug" class="mb-1 block text-sm font-medium">URL slug</label>
+              <input id="post-slug" required maxlength="180" pattern="[A-Za-z0-9][A-Za-z0-9/_-]*" class="border-border bg-background w-full rounded border px-3 py-2" />
+              <p class="text-muted-foreground mt-1 text-xs">Use letters, numbers, hyphens, underscores, and optional path segments.</p>
+            </div>
+            <div>
+              <label for="post-title" class="mb-1 block text-sm font-medium">Title</label>
+              <input id="post-title" required maxlength="255" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+          </div>
+          <div>
+            <label for="post-description" class="mb-1 block text-sm font-medium">Description</label>
+            <textarea id="post-description" required maxlength="500" rows="2" class="border-border bg-background w-full rounded border px-3 py-2"></textarea>
+          </div>
+          <div>
+            <label for="post-markdown" class="mb-1 block text-sm font-medium">Markdown content</label>
+            <textarea id="post-markdown" required rows="18" class="border-border bg-background w-full rounded border px-3 py-2 font-mono text-sm leading-6"></textarea>
+            <p class="text-muted-foreground mt-1 text-xs">Write Markdown. Database articles do not run MDX components.</p>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label for="post-tags" class="mb-1 block text-sm font-medium">Tags</label>
+              <input id="post-tags" list="post-tag-options" placeholder="Astro, Java, MySQL" class="border-border bg-background w-full rounded border px-3 py-2" />
+              <datalist id="post-tag-options"></datalist>
+              <p class="text-muted-foreground mt-1 text-xs">Separate tag names with commas. New names are added when saved.</p>
+            </div>
+            <div>
+              <label for="post-author-name" class="mb-1 block text-sm font-medium">Displayed author</label>
+              <input id="post-author-name" maxlength="100" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+            <div>
+              <label for="post-cover-image" class="mb-1 block text-sm font-medium">Cover image URL</label>
+              <input id="post-cover-image" maxlength="2048" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+            <div>
+              <label for="post-timezone" class="mb-1 block text-sm font-medium">Timezone</label>
+              <input id="post-timezone" maxlength="64" placeholder="Asia/Shanghai" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+            <div>
+              <label for="post-canonical-url" class="mb-1 block text-sm font-medium">Canonical URL</label>
+              <input id="post-canonical-url" maxlength="2048" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+            <div>
+              <label for="post-og-image" class="mb-1 block text-sm font-medium">Open Graph image URL</label>
+              <input id="post-og-image" maxlength="2048" class="border-border bg-background w-full rounded border px-3 py-2" />
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-x-6 gap-y-3 text-sm">
+            <label class="flex items-center gap-2"><input id="post-featured" type="checkbox" /> Featured</label>
+            <label class="flex items-center gap-2"><input id="post-hide-edit" type="checkbox" /> Hide edit link</label>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button id="save-post-button" type="submit" class="bg-accent text-accent-foreground rounded px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-60">Save draft</button>
+            <button id="publish-post-button" type="button" class="border-border rounded border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60" hidden>Publish</button>
+            <button id="draft-post-button" type="button" class="border-border rounded border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60" hidden>Move to draft</button>
+            <button id="archive-post-button" type="button" class="border-border rounded border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60" hidden>Archive</button>
+          </div>
+        </form>
+      </section>
+    </section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser, sendJson, type SessionUser } from "@/lib/session-api";
+
+  type Tag = { slug: string; name: string };
+  type Post = {
+    id: number;
+    slug: string;
+    title: string;
+    description: string;
+    contentMarkdown: string;
+    coverImage: string | null;
+    status: string;
+    authorId: number;
+    authorName: string;
+    publishedAt: string | null;
+    modifiedAt: string | null;
+    timezone: string | null;
+    featured: boolean;
+    canonicalURL: string | null;
+    ogImage: string | null;
+    hideEditPost: boolean;
+    tags: Tag[];
+  };
+  type PostSummary = Pick<Post, "id" | "slug" | "title" | "description" | "status" | "authorId" | "authorName" | "publishedAt" | "modifiedAt" | "tags">;
+  type Page<T> = { content: T[]; page: number; totalElements: number; totalPages: number };
+
+  let currentPage = 0;
+  let totalPages = 0;
+  let currentUser: SessionUser | null = null;
+  let allTags: Tag[] = [];
+  let searchTimer: number | undefined;
+
+  async function getJson<T>(path: string): Promise<T> {
+    const response = await fetch(path, { credentials: "same-origin", headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+      throw new Error(problem.detail ?? "The request could not be completed.");
+    }
+    return (await response.json()) as T;
+  }
+
+  function setStatus(message: string, error = false) {
+    const node = document.querySelector<HTMLElement>("#posts-admin-status");
+    if (!node) return;
+    node.classList.toggle("text-red-600", error);
+    node.classList.toggle("text-muted-foreground", !error);
+    node.textContent = message;
+  }
+
+  function canEdit(post: PostSummary) {
+    return Boolean(currentUser && (currentUser.roles.includes("ADMIN") || currentUser.id === post.authorId));
+  }
+
+  function actionButton(label: string, postId: number, action: string) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "border-border rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50";
+    button.dataset.postId = String(postId);
+    button.dataset.postAction = action;
+    button.textContent = label;
+    return button;
+  }
+
+  function renderPost(post: PostSummary) {
+    const card = document.createElement("article");
+    card.className = "border-border space-y-3 rounded border p-4";
+    const title = document.createElement("h3");
+    title.className = "font-semibold";
+    title.textContent = post.title;
+    const details = document.createElement("p");
+    details.className = "text-muted-foreground break-all text-sm";
+    details.textContent = `/${post.slug} · ${post.status} · ${post.authorName}`;
+    const tags = document.createElement("p");
+    tags.className = "text-muted-foreground text-sm";
+    tags.textContent = post.tags.map(tag => tag.name).join(", ");
+    const actions = document.createElement("div");
+    actions.className = "flex flex-wrap gap-2";
+    if (canEdit(post) && currentUser?.permissions.includes("post:update")) {
+      actions.append(actionButton("Edit", post.id, "edit"));
+    }
+    if (canEdit(post) && post.status !== "PUBLISHED" && currentUser?.permissions.includes("post:publish")) {
+      actions.append(actionButton("Publish", post.id, "publish"));
+    }
+    if (canEdit(post) && post.status === "PUBLISHED" && currentUser?.permissions.includes("post:update")) {
+      actions.append(actionButton("Move to draft", post.id, "draft"));
+    }
+    if (canEdit(post) && post.status !== "ARCHIVED" && currentUser?.permissions.includes("post:delete")) {
+      actions.append(actionButton("Archive", post.id, "archive"));
+    }
+    card.append(title, details);
+    if (post.tags.length > 0) card.append(tags);
+    if (actions.childElementCount > 0) card.append(actions);
+    return card;
+  }
+
+  async function loadPosts() {
+    const list = document.querySelector<HTMLElement>("#posts-list");
+    const label = document.querySelector<HTMLElement>("#posts-page");
+    const prev = document.querySelector<HTMLButtonElement>("#posts-prev");
+    const next = document.querySelector<HTMLButtonElement>("#posts-next");
+    const listStatus = document.querySelector<HTMLElement>("#posts-list-status");
+    if (!list || !label || !prev || !next || !listStatus) return;
+    const params = new URLSearchParams({ page: String(currentPage), size: "25" });
+    const filter = document.querySelector<HTMLSelectElement>("#posts-status-filter")?.value;
+    const query = document.querySelector<HTMLInputElement>("#posts-search")?.value.trim();
+    if (filter) params.set("status", filter);
+    if (query) params.set("q", query);
+    listStatus.textContent = "Loading articles…";
+    try {
+      const page = await getJson<Page<PostSummary>>(`/api/v1/admin/posts?${params}`);
+      list.replaceChildren(...page.content.map(renderPost));
+      currentPage = page.page;
+      totalPages = page.totalPages;
+      label.textContent = `${page.totalElements} article(s) · page ${currentPage + 1} of ${Math.max(totalPages, 1)}`;
+      prev.disabled = currentPage === 0;
+      next.disabled = currentPage + 1 >= totalPages;
+      listStatus.textContent = page.totalElements === 0 ? "No articles match these filters." : "";
+    } catch (error) {
+      listStatus.classList.add("text-red-600");
+      listStatus.textContent = error instanceof Error ? error.message : "Articles could not be loaded.";
+    }
+  }
+
+  function field(id: string) {
+    return document.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${id}`);
+  }
+
+  function formValue(id: string) {
+    return field(id)?.value.trim() ?? "";
+  }
+
+  function fillEditor(post?: Post) {
+    const editor = document.querySelector<HTMLElement>("#post-editor-panel");
+    const heading = document.querySelector<HTMLElement>("#post-editor-heading");
+    const save = document.querySelector<HTMLButtonElement>("#save-post-button");
+    const publish = document.querySelector<HTMLButtonElement>("#publish-post-button");
+    const draft = document.querySelector<HTMLButtonElement>("#draft-post-button");
+    const archive = document.querySelector<HTMLButtonElement>("#archive-post-button");
+    if (!editor || !heading || !save || !publish || !draft || !archive) return;
+    const isEdit = Boolean(post);
+    const canUpdate = Boolean(currentUser?.permissions.includes("post:update"));
+    const canCreate = Boolean(currentUser?.permissions.includes("post:create"));
+    editor.hidden = !(isEdit ? canUpdate : canCreate);
+    if (editor.hidden) return;
+    heading.textContent = isEdit ? `Edit article · ${post?.status}` : "New article";
+    save.textContent = isEdit ? "Save changes" : "Save draft";
+    document.querySelector<HTMLInputElement>("#post-id")!.value = post ? String(post.id) : "";
+    document.querySelector<HTMLInputElement>("#post-slug")!.value = post?.slug ?? "";
+    document.querySelector<HTMLInputElement>("#post-title")!.value = post?.title ?? "";
+    document.querySelector<HTMLTextAreaElement>("#post-description")!.value = post?.description ?? "";
+    document.querySelector<HTMLTextAreaElement>("#post-markdown")!.value = post?.contentMarkdown ?? "";
+    document.querySelector<HTMLInputElement>("#post-tags")!.value = post?.tags.map(tag => tag.name).join(", ") ?? "";
+    document.querySelector<HTMLInputElement>("#post-author-name")!.value = post?.authorName ?? currentUser?.displayName ?? "";
+    document.querySelector<HTMLInputElement>("#post-cover-image")!.value = post?.coverImage ?? "";
+    document.querySelector<HTMLInputElement>("#post-timezone")!.value = post?.timezone ?? "Asia/Shanghai";
+    document.querySelector<HTMLInputElement>("#post-canonical-url")!.value = post?.canonicalURL ?? "";
+    document.querySelector<HTMLInputElement>("#post-og-image")!.value = post?.ogImage ?? "";
+    document.querySelector<HTMLInputElement>("#post-featured")!.checked = post?.featured ?? false;
+    document.querySelector<HTMLInputElement>("#post-hide-edit")!.checked = post?.hideEditPost ?? false;
+    save.hidden = !canUpdate && isEdit;
+    publish.hidden = !isEdit || !currentUser?.permissions.includes("post:publish") || post?.status === "PUBLISHED";
+    draft.hidden = !isEdit || !canUpdate || post?.status !== "PUBLISHED";
+    archive.hidden = !isEdit || !currentUser?.permissions.includes("post:delete") || post?.status === "ARCHIVED";
+    editor.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function collectPost() {
+    return {
+      slug: formValue("post-slug"),
+      title: formValue("post-title"),
+      description: formValue("post-description"),
+      contentMarkdown: field("post-markdown")?.value ?? "",
+      coverImage: formValue("post-cover-image") || null,
+      authorName: formValue("post-author-name") || null,
+      timezone: formValue("post-timezone") || null,
+      featured: document.querySelector<HTMLInputElement>("#post-featured")?.checked ?? false,
+      canonicalURL: formValue("post-canonical-url") || null,
+      ogImage: formValue("post-og-image") || null,
+      hideEditPost: document.querySelector<HTMLInputElement>("#post-hide-edit")?.checked ?? false,
+      tags: formValue("post-tags").split(",").map(tag => tag.trim()).filter(Boolean),
+    };
+  }
+
+  async function savePost(event: SubmitEvent) {
+    event.preventDefault();
+    const button = document.querySelector<HTMLButtonElement>("#save-post-button");
+    const postId = document.querySelector<HTMLInputElement>("#post-id")?.value;
+    if (button) button.disabled = true;
+    try {
+      const saved = await sendJson<Post>(postId ? `/api/v1/admin/posts/${postId}` : "/api/v1/admin/posts", postId ? "PUT" : "POST", collectPost());
+      fillEditor(saved);
+      await loadPosts();
+      setStatus(saved.status === "DRAFT" ? "Draft saved." : "Article changes saved.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Article could not be saved.", true);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function changeStatus(postId: number, status: string) {
+    try {
+      const updated = await sendJson<Post>(`/api/v1/admin/posts/${postId}/status`, "PUT", { status });
+      fillEditor(updated);
+      await loadPosts();
+      setStatus(`Article status changed to ${updated.status}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Article status could not be changed.", true);
+    }
+  }
+
+  function bindPostActions() {
+    const workspace = document.querySelector<HTMLElement>("#posts-admin-workspace");
+    if (!workspace || workspace.dataset.bound === "true") return;
+    workspace.dataset.bound = "true";
+    document.querySelector<HTMLFormElement>("#post-editor-form")?.addEventListener("submit", event => void savePost(event));
+    document.querySelector<HTMLButtonElement>("#new-post-button")?.addEventListener("click", () => fillEditor());
+    document.querySelector<HTMLButtonElement>("#cancel-post-edit")?.addEventListener("click", () => {
+      const editor = document.querySelector<HTMLElement>("#post-editor-panel");
+      if (editor) editor.hidden = true;
+    });
+    document.querySelector<HTMLButtonElement>("#posts-prev")?.addEventListener("click", () => {
+      if (currentPage > 0) currentPage -= 1;
+      void loadPosts();
+    });
+    document.querySelector<HTMLButtonElement>("#posts-next")?.addEventListener("click", () => {
+      if (currentPage + 1 < totalPages) currentPage += 1;
+      void loadPosts();
+    });
+    document.querySelector<HTMLSelectElement>("#posts-status-filter")?.addEventListener("change", () => {
+      currentPage = 0;
+      void loadPosts();
+    });
+    document.querySelector<HTMLInputElement>("#posts-search")?.addEventListener("input", () => {
+      window.clearTimeout(searchTimer);
+      searchTimer = window.setTimeout(() => {
+        currentPage = 0;
+        void loadPosts();
+      }, 250);
+    });
+    workspace.addEventListener("click", async event => {
+      const target = event.target;
+      if (!(target instanceof HTMLButtonElement)) return;
+      const postId = Number(target.dataset.postId);
+      const action = target.dataset.postAction;
+      if (!postId || !action) return;
+      target.disabled = true;
+      if (action === "edit") {
+        try {
+          fillEditor(await getJson<Post>(`/api/v1/admin/posts/${postId}`));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : "Article could not be loaded.", true);
+        } finally {
+          target.disabled = false;
+        }
+        return;
+      }
+      const status = action === "publish" ? "PUBLISHED" : action === "draft" ? "DRAFT" : "ARCHIVED";
+      await changeStatus(postId, status);
+      target.disabled = false;
+    });
+    document.querySelector<HTMLButtonElement>("#publish-post-button")?.addEventListener("click", () => {
+      const id = Number(document.querySelector<HTMLInputElement>("#post-id")?.value);
+      if (id) void changeStatus(id, "PUBLISHED");
+    });
+    document.querySelector<HTMLButtonElement>("#draft-post-button")?.addEventListener("click", () => {
+      const id = Number(document.querySelector<HTMLInputElement>("#post-id")?.value);
+      if (id) void changeStatus(id, "DRAFT");
+    });
+    document.querySelector<HTMLButtonElement>("#archive-post-button")?.addEventListener("click", () => {
+      const id = Number(document.querySelector<HTMLInputElement>("#post-id")?.value);
+      if (id) void changeStatus(id, "ARCHIVED");
+    });
+  }
+
+  async function setupPostManagement() {
+    const workspace = document.querySelector<HTMLElement>("#posts-admin-workspace");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#posts-admin-login-link");
+    const listPanel = document.querySelector<HTMLElement>("#post-list-panel");
+    const newButton = document.querySelector<HTMLButtonElement>("#new-post-button");
+    if (!workspace || !loginLink || !listPanel || !newButton) return;
+    workspace.hidden = true;
+    loginLink.hidden = true;
+    setStatus("Checking permissions…");
+    try {
+      currentUser = await getSessionUser();
+      if (!currentUser) {
+        setStatus("Sign in to manage articles.");
+        loginLink.hidden = false;
+        return;
+      }
+      const canRead = currentUser.permissions.includes("post:read");
+      const canCreate = currentUser.permissions.includes("post:create");
+      const canUpdate = currentUser.permissions.includes("post:update");
+      if (!canRead && !canCreate && !canUpdate) {
+        setStatus("This account cannot manage articles.", true);
+        return;
+      }
+      listPanel.hidden = !canRead;
+      newButton.hidden = !canCreate;
+      if (canRead) {
+        allTags = await getJson<Tag[]>("/api/v1/admin/tags");
+        const options = document.querySelector<HTMLDataListElement>("#post-tag-options");
+        if (options) options.replaceChildren(...allTags.map(tag => {
+          const option = document.createElement("option");
+          option.value = tag.name;
+          return option;
+        }));
+      }
+      bindPostActions();
+      workspace.hidden = false;
+      if (canRead) await loadPosts();
+      setStatus("Article management is ready.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Article management is unavailable.", true);
+    }
+  }
+
+  setupPostManagement();
+  document.addEventListener("astro:page-load", setupPostManagement);
+</script>

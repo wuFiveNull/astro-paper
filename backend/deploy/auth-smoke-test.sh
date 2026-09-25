@@ -27,10 +27,13 @@ db_password="$(openssl rand -hex 32)"
 mysql_root_password="$(openssl rand -hex 32)"
 admin_password="$(openssl rand -hex 24)"
 user_password="$(openssl rand -hex 24)"
+editor_password="$(openssl rand -hex 24)"
 admin_username="codex-smoke-admin"
 admin_email="codex-smoke-admin@example.test"
 user_username="codex-smoke-user"
 user_email="codex-smoke-user@example.test"
+editor_username="codex-smoke-editor"
+editor_email="codex-smoke-editor@example.test"
 
 cat > .env <<EOF
 API_HOST_PORT=${api_host_port}
@@ -52,13 +55,14 @@ compose=(docker compose --project-name "$project_name" -f compose.test.yaml -f c
 smoke_tmp_dir="$(mktemp -d)"
 admin_cookie_jar="${smoke_tmp_dir}/admin.cookies"
 user_cookie_jar="${smoke_tmp_dir}/user.cookies"
+editor_cookie_jar="${smoke_tmp_dir}/editor.cookies"
 response_file="${smoke_tmp_dir}/response.json"
 anonymous_cookie_jar="${smoke_tmp_dir}/anonymous.cookies"
-touch "$admin_cookie_jar" "$user_cookie_jar" "$anonymous_cookie_jar"
+touch "$admin_cookie_jar" "$user_cookie_jar" "$editor_cookie_jar" "$anonymous_cookie_jar"
 
 cleanup() {
   "${compose[@]}" down --volumes >/dev/null 2>&1 || true
-  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$anonymous_cookie_jar" "$response_file" .env
+  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$editor_cookie_jar" "$anonymous_cookie_jar" "$response_file" .env
   rmdir -- "$smoke_tmp_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -133,12 +137,40 @@ roles_status="$(curl --silent --output "$response_file" --write-out '%{http_code
 admin_users="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/users")"
 [[ "$admin_users" == *'"username":"codex-smoke-admin"'* ]]
 
+anonymous_admin_posts_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$anonymous_cookie_jar" "${base_url}/api/v1/admin/posts")"
+[[ "$anonymous_admin_posts_status" == 401 ]]
+admin_articles="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/posts?status=PUBLISHED")"
+[[ "$admin_articles" == *'"slug":"smoke-test-post"'* ]]
+article_payload='{"slug":"cloud-managed-smoke-post","title":"Cloud managed article","description":"Temporary article management smoke test","contentMarkdown":"# Cloud Markdown body","timezone":"Asia/Shanghai","featured":true,"hideEditPost":false,"tags":["Cloud Smoke","Spring Boot"]}'
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+request_json POST /api/v1/admin/posts "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$article_payload" 201
+grep -q '"status":"DRAFT"' "$response_file"
+article_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
+[[ -n "$article_id" ]]
+article_list="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/posts?status=DRAFT")"
+[[ "$article_list" == *'"slug":"cloud-managed-smoke-post"'* ]]
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+request_json PUT "/api/v1/admin/posts/${article_id}/status" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" '{"status":"PUBLISHED"}' 200
+grep -q '"status":"PUBLISHED"' "$response_file"
+public_article="$(curl --fail --silent --show-error "${base_url}/api/v1/posts/cloud-managed-smoke-post")"
+[[ "$public_article" == *'"contentMarkdown":"# Cloud Markdown body"'* ]]
+[[ "$public_article" == *'"tags":["Cloud Smoke","Spring Boot"]'* ]]
+
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 user_payload="$(printf '{"username":"%s","email":"%s","password":"%s","displayName":"Cloud Smoke User"}' "$user_username" "$user_email" "$user_password")"
 request_json POST /api/v1/admin/users "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$user_payload" 201
 grep -q '"roles":\["USER"\]' "$response_file"
 user_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
 [[ -n "$user_id" ]]
+
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+editor_payload="$(printf '{"username":"%s","email":"%s","password":"%s","displayName":"Cloud Smoke Editor"}' "$editor_username" "$editor_email" "$editor_password")"
+request_json POST /api/v1/admin/users "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$editor_payload" 201
+editor_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
+[[ -n "$editor_id" ]]
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+request_json PUT "/api/v1/admin/users/${editor_id}/roles" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" '{"roleCodes":["EDITOR"]}' 200
+grep -q '"roles":\["EDITOR"\]' "$response_file"
 
 mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
 user_login_payload="$(printf '{"username":"%s","password":"%s"}' "$user_username" "$user_password")"
@@ -151,6 +183,8 @@ user_roles_status="$(curl --silent --output "$response_file" --write-out '%{http
 [[ "$user_roles_status" == 403 ]]
 user_admin_users_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/users")"
 [[ "$user_admin_users_status" == 403 ]]
+user_admin_posts_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/posts")"
+[[ "$user_admin_posts_status" == 403 ]]
 user_comments_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/comments")"
 [[ "$user_comments_status" == 403 ]]
 user_messages_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/messages")"
@@ -187,6 +221,24 @@ resolve_message_payload='{"status":"RESOLVED"}'
 request_json PUT "/api/v1/admin/messages/${message_id}/status" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$resolve_message_payload" 200
 grep -q '"status":"RESOLVED"' "$response_file"
 
+mapfile -t editor_csrf < <(fetch_csrf "$editor_cookie_jar")
+editor_login_payload="$(printf '{"username":"%s","password":"%s"}' "$editor_username" "$editor_password")"
+request_json POST /api/v1/auth/login "$editor_cookie_jar" "${editor_csrf[0]}" "${editor_csrf[1]}" "$editor_login_payload" 200
+grep -q '"roles":\["EDITOR"\]' "$response_file"
+mapfile -t editor_csrf < <(fetch_csrf "$editor_cookie_jar")
+editor_article_payload='{"slug":"cloud-editor-smoke-post","title":"Cloud editor article","description":"Temporary owner scope test","contentMarkdown":"Editor Markdown","tags":["Cloud Smoke"]}'
+request_json POST /api/v1/admin/posts "$editor_cookie_jar" "${editor_csrf[0]}" "${editor_csrf[1]}" "$editor_article_payload" 201
+grep -q "\"authorId\":${editor_id}" "$response_file"
+editor_article_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
+[[ -n "$editor_article_id" ]]
+editor_posts="$(curl --fail --silent --show-error --cookie "$editor_cookie_jar" "${base_url}/api/v1/admin/posts")"
+[[ "$editor_posts" == *'"slug":"cloud-editor-smoke-post"'* ]]
+[[ "$editor_posts" != *'"slug":"cloud-managed-smoke-post"'* ]]
+editor_foreign_payload='{"slug":"cloud-managed-smoke-post","title":"Blocked edit","description":"Must be forbidden","contentMarkdown":"Nope"}'
+request_json PUT "/api/v1/admin/posts/${article_id}" "$editor_cookie_jar" "${editor_csrf[0]}" "${editor_csrf[1]}" "$editor_foreign_payload" 403
+admin_articles="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/posts?size=100")"
+[[ "$admin_articles" == *'"slug":"cloud-editor-smoke-post"'* ]]
+
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 disable_payload='{"status":"DISABLED"}'
 request_json PUT "/api/v1/admin/users/${user_id}/status" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$disable_payload" 200
@@ -195,5 +247,5 @@ grep -q '"status":"DISABLED"' "$response_file"
 inactive_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/auth/me")"
 [[ "$inactive_status" == 401 ]]
 
-unset db_password mysql_root_password admin_password user_password
-printf 'Cloud API smoke test passed: MySQL health, authentication/RBAC, protected comment submission and moderation, protected guestbook submission and status update, and account disable.\n'
+unset db_password mysql_root_password admin_password user_password editor_password
+printf 'Cloud API smoke test passed: MySQL health, authentication/RBAC, Markdown article management and publication, editor ownership boundaries, protected comments and moderation, protected guestbook submission and status update, and account disable.\n'
