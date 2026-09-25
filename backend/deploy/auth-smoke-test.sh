@@ -4,12 +4,12 @@ set -euo pipefail
 deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$deploy_dir"
 
-project_name="${COMPOSE_PROJECT_NAME:-astro-paper-api-auth-smoke-local}"
+project_name="${COMPOSE_PROJECT_NAME:-astro-paper-api-smoke-local}"
 api_host_port="${API_HOST_PORT:-18082}"
 base_url="http://127.0.0.1:${api_host_port}"
 
-if [[ ! "$project_name" =~ ^astro-paper-api-auth-smoke-[a-z0-9][a-z0-9-]*$ ]]; then
-  printf 'COMPOSE_PROJECT_NAME must start with astro-paper-api-auth-smoke- so cleanup stays isolated.\n' >&2
+if [[ ! "$project_name" =~ ^astro-paper-api-smoke-[a-z0-9][a-z0-9-]*$ ]]; then
+  printf 'COMPOSE_PROJECT_NAME must start with astro-paper-api-smoke- so cleanup stays isolated.\n' >&2
   exit 1
 fi
 
@@ -53,11 +53,12 @@ smoke_tmp_dir="$(mktemp -d)"
 admin_cookie_jar="${smoke_tmp_dir}/admin.cookies"
 user_cookie_jar="${smoke_tmp_dir}/user.cookies"
 response_file="${smoke_tmp_dir}/response.json"
-touch "$admin_cookie_jar" "$user_cookie_jar"
+anonymous_cookie_jar="${smoke_tmp_dir}/anonymous.cookies"
+touch "$admin_cookie_jar" "$user_cookie_jar" "$anonymous_cookie_jar"
 
 cleanup() {
   "${compose[@]}" down --volumes >/dev/null 2>&1 || true
-  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$response_file" .env
+  rm -f -- "$admin_cookie_jar" "$user_cookie_jar" "$anonymous_cookie_jar" "$response_file" .env
   rmdir -- "$smoke_tmp_dir" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -111,6 +112,15 @@ printf 'ADMIN_BOOTSTRAP_ENABLED=false\n' >> .env
 "${compose[@]}" up --detach --force-recreate api >/dev/null
 wait_for_api
 
+printf "%s\n" "INSERT INTO posts (slug, title, description, content_markdown, status, author_id, published_at) SELECT 'smoke-test-post', 'Smoke test post', 'Temporary smoke test content', 'Body', 'PUBLISHED', id, CURRENT_TIMESTAMP(6) FROM users WHERE username = '${admin_username}';" \
+  | "${compose[@]}" exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql --batch --skip-column-names --user="$MYSQL_USER" "$MYSQL_DATABASE"'
+public_comments="$(curl --fail --silent --show-error "${base_url}/api/v1/comments?postSlug=smoke-test-post")"
+[[ "$public_comments" == *'"totalElements":0'* ]]
+
+mapfile -t anonymous_csrf < <(fetch_csrf "$anonymous_cookie_jar")
+anonymous_comment_payload="$(printf '{"postSlug":"%s","body":"Anonymous comment"}' "smoke-test-post")"
+request_json POST /api/v1/comments "$anonymous_cookie_jar" "${anonymous_csrf[0]}" "${anonymous_csrf[1]}" "$anonymous_comment_payload" 401
+
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 admin_login_payload="$(printf '{"username":"%s","password":"%s"}' "$admin_username" "$admin_password")"
 request_json POST /api/v1/auth/login "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$admin_login_payload" 200
@@ -137,6 +147,41 @@ mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
 request_json POST /api/v1/admin/users "$user_cookie_jar" "${user_csrf[0]}" "${user_csrf[1]}" "$user_payload" 403
 user_roles_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/roles")"
 [[ "$user_roles_status" == 403 ]]
+user_comments_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/comments")"
+[[ "$user_comments_status" == 403 ]]
+user_messages_status="$(curl --silent --output "$response_file" --write-out '%{http_code}' --cookie "$user_cookie_jar" "${base_url}/api/v1/admin/messages")"
+[[ "$user_messages_status" == 403 ]]
+
+mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
+comment_payload="$(printf '{"postSlug":"%s","body":"Cloud smoke comment"}' "smoke-test-post")"
+request_json POST /api/v1/comments "$user_cookie_jar" "${user_csrf[0]}" "${user_csrf[1]}" "$comment_payload" 201
+grep -q '"status":"PENDING"' "$response_file"
+comment_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
+[[ -n "$comment_id" ]]
+public_comments="$(curl --fail --silent --show-error "${base_url}/api/v1/comments?postSlug=smoke-test-post")"
+[[ "$public_comments" == *'"totalElements":0'* ]]
+
+admin_pending_comments="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/comments?status=PENDING")"
+[[ "$admin_pending_comments" == *'"username":"codex-smoke-user"'* ]]
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+publish_comment_payload='{"status":"PUBLISHED"}'
+request_json PUT "/api/v1/admin/comments/${comment_id}/status" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$publish_comment_payload" 200
+grep -q '"status":"PUBLISHED"' "$response_file"
+public_comments="$(curl --fail --silent --show-error "${base_url}/api/v1/comments?postSlug=smoke-test-post")"
+[[ "$public_comments" == *'"authorName":"Cloud Smoke User"'* ]]
+
+mapfile -t user_csrf < <(fetch_csrf "$user_cookie_jar")
+message_payload='{"subject":"Cloud smoke message","body":"Temporary message"}'
+request_json POST /api/v1/messages "$user_cookie_jar" "${user_csrf[0]}" "${user_csrf[1]}" "$message_payload" 201
+grep -q '"status":"NEW"' "$response_file"
+message_id="$(sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p' "$response_file")"
+[[ -n "$message_id" ]]
+admin_new_messages="$(curl --fail --silent --show-error --cookie "$admin_cookie_jar" "${base_url}/api/v1/admin/messages?status=NEW")"
+[[ "$admin_new_messages" == *'"senderEmail":"codex-smoke-user@example.test"'* ]]
+mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
+resolve_message_payload='{"status":"RESOLVED"}'
+request_json PUT "/api/v1/admin/messages/${message_id}/status" "$admin_cookie_jar" "${admin_csrf[0]}" "${admin_csrf[1]}" "$resolve_message_payload" 200
+grep -q '"status":"RESOLVED"' "$response_file"
 
 mapfile -t admin_csrf < <(fetch_csrf "$admin_cookie_jar")
 disable_payload='{"status":"DISABLED"}'
@@ -147,4 +192,4 @@ inactive_status="$(curl --silent --output "$response_file" --write-out '%{http_c
 [[ "$inactive_status" == 401 ]]
 
 unset db_password mysql_root_password admin_password user_password
-printf 'Cloud authentication smoke test passed: MySQL health, admin bootstrap/login, standard account creation/login, authorization denial, and account disable.\n'
+printf 'Cloud API smoke test passed: MySQL health, authentication/RBAC, protected comment submission and moderation, protected guestbook submission and status update, and account disable.\n'

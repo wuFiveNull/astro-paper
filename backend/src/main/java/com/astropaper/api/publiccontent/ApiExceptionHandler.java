@@ -8,6 +8,8 @@ import com.astropaper.api.auth.InvalidAccessConfigurationException;
 import com.astropaper.api.auth.LastAdministratorException;
 import com.astropaper.api.auth.UnknownAccessCodeException;
 import com.astropaper.api.auth.UserAlreadyExistsException;
+import com.astropaper.api.interactions.InvalidCommentParentException;
+import com.astropaper.api.interactions.InvalidInteractionStatusException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -76,6 +78,20 @@ public class ApiExceptionHandler {
     public ProblemDetail handleLastAdministrator() {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "At least one active administrator must remain.");
         problem.setTitle("Last administrator cannot be removed");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidInteractionStatusException.class)
+    public ProblemDetail handleInvalidInteractionStatus(InvalidInteractionStatusException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid interaction status");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidCommentParentException.class)
+    public ProblemDetail handleInvalidCommentParent(InvalidCommentParentException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid reply target");
         return problem;
     }
 }

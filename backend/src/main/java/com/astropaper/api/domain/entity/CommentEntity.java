@@ -47,6 +47,18 @@ public class CommentEntity {
     protected CommentEntity() {
     }
 
+    public CommentEntity(PostEntity post, UserEntity user, CommentEntity parent, String body) {
+        this.post = post;
+        this.user = user;
+        this.parent = parent;
+        this.body = body;
+        this.status = "PENDING";
+    }
+
+    public void changeStatus(String status) {
+        this.status = status;
+    }
+
     public Long getId() { return id; }
     public PostEntity getPost() { return post; }
     public UserEntity getUser() { return user; }

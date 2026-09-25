@@ -48,6 +48,19 @@ public class MessageEntity {
     protected MessageEntity() {
     }
 
+    public MessageEntity(UserEntity user, String senderName, String senderEmail, String subject, String body) {
+        this.user = user;
+        this.senderName = senderName;
+        this.senderEmail = senderEmail;
+        this.subject = subject;
+        this.body = body;
+        this.status = "NEW";
+    }
+
+    public void changeStatus(String status) {
+        this.status = status;
+    }
+
     public Long getId() { return id; }
     public UserEntity getUser() { return user; }
     public String getSenderName() { return senderName; }

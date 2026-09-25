@@ -60,6 +60,16 @@ The backend's `ADMIN`, `EDITOR`, and `USER` roles and permission codes are seede
 
 Post metadata preserves the AstroPaper frontmatter names where practical (`pubDatetime`, `modDatetime`, `canonicalURL`, `ogImage`, `hideEditPost`). V3 adds storage for those fields. The API stores and renders Markdown; it does not execute database MDX.
 
+## Comment and guestbook API
+
+- `GET /api/v1/comments?postSlug={slug}&page=0&size=50` returns only published comments for a published article. It exposes the author's display name, not email.
+- `POST /api/v1/comments` requires an authenticated account with `comment:create`; send `postSlug`, `body`, and optionally `parentId`. New comments start as `PENDING`, and replies can target only a published comment on the same article.
+- `POST /api/v1/messages` requires an authenticated account with `message:create`; send an optional `subject` and required `body`. The sender name and email are copied from the signed-in account, and each message starts as `NEW`.
+- `GET /api/v1/admin/comments?status=PENDING` and `PUT /api/v1/admin/comments/{id}/status` require `comment:moderate`. The allowed moderation results are `PUBLISHED` and `REJECTED`.
+- `GET /api/v1/admin/messages?status=NEW` requires `message:read`; `PUT /api/v1/admin/messages/{id}/status` requires `message:update`. The allowed states are `IN_PROGRESS`, `RESOLVED`, and `SPAM`.
+
+All write requests also require the session's CSRF token. Public comments and admin/message data use separate DTOs so comment email addresses and private guestbook messages are not exposed publicly.
+
 ## Prepare the Markdown/MDX import
 
 Run the migration tool from the repository root with Node.js 22.12 or later:
@@ -96,10 +106,10 @@ docker compose --project-name astro-paper-api-test -f compose.test.yaml up -d
 
 Verify `http://127.0.0.1:18081/api/v1/health`, `http://127.0.0.1:18081/actuator/health`, and `http://127.0.0.1:18080/` from the server. Keep the private `.env` on the server only. The named MySQL volume retains test data across container restarts; do not remove it unless its data is intentionally disposable.
 
-For an API-only authentication smoke test on a memory-constrained server, copy the root `Dockerfile`, the locally built JAR, `deploy/compose.test.yaml`, `deploy/compose.auth-smoke.yaml`, and `deploy/auth-smoke-test.sh` into a private directory that preserves the same `backend/deploy/` subdirectory. Start it from that subdirectory with a new Compose project name and an unused loopback port:
+For an API-only smoke test on a memory-constrained server, copy the root `Dockerfile`, the locally built JAR, `deploy/compose.test.yaml`, `deploy/compose.auth-smoke.yaml`, and `deploy/auth-smoke-test.sh` into a private directory that preserves the same `backend/deploy/` subdirectory. Start it from that subdirectory with a new Compose project name and an unused loopback port:
 
 ```bash
-COMPOSE_PROJECT_NAME=astro-paper-api-auth-smoke-local API_HOST_PORT=18082 bash auth-smoke-test.sh
+COMPOSE_PROJECT_NAME=astro-paper-api-smoke-local API_HOST_PORT=18082 bash auth-smoke-test.sh
 ```
 
-The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, standard account creation, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 640 MiB, and removes its generated `.env`, cookie jars, containers, and dedicated disposable database volume when it exits, including after a failed run. Its project name must start with `astro-paper-api-auth-smoke-`; cleanup is scoped to that Compose project. It does not stop or connect to the production stack.
+The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, account creation, comment visibility/moderation, guestbook status changes, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 640 MiB, and removes its generated `.env`, cookie jars, containers, and dedicated disposable database volume when it exits, including after a failed run. Its project name must start with `astro-paper-api-smoke-`; cleanup is scoped to that Compose project. It does not stop or connect to the production stack.
