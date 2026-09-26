@@ -77,6 +77,7 @@ const {
   modDatetime,
   timezone,
   tags,
+  coverImage,
   hideEditPost,
   contentMarkdown,
 } = post;
@@ -144,6 +145,18 @@ loginUrl.searchParams.set("returnTo", `${Astro.url.pathname}${Astro.url.search}`
         class="max-sm:hidden"
       />
     </div>
+
+    {
+      coverImage && (
+        <img
+          src={coverImage}
+          alt={title}
+          class="border-border mt-8 max-h-[32rem] w-full rounded-lg border object-cover"
+          loading="eager"
+          decoding="async"
+        />
+      )
+    }
 
     <article
       id="article"
