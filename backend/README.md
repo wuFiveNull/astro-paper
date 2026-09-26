@@ -73,6 +73,8 @@ Post metadata preserves the AstroPaper frontmatter names where practical (`pubDa
 - `POST /api/v1/admin/uploads/images` accepts a `multipart/form-data` part named `file` for authenticated accounts with `post:create` or `post:update`; JPEG, PNG, GIF, WebP, and AVIF files up to 10 MB are stored with generated names and return a same-origin URL.
 - `GET /api/v1/uploads/images/{filename}` serves a stored image publicly so published Markdown can reference it. The original Markdown image syntax remains supported and rendered through the existing sanitizer.
 
+Multipart uploads use a zero-byte in-memory threshold and place temporary request files in `APP_UPLOAD_DIR`, the same persistent volume used for stored images. The API copies data in small chunks and streams stored files from disk, so the image contents are not retained in the Java heap; the operating system may still use reclaimable page cache for disk I/O.
+
 Every operation requires an active session and the matching permission. Editors are scoped to their own authored articles for listing, reading, editing, publishing, and archiving; administrators can manage all articles. The page uses the existing AstroPaper layout and accepts Markdown source, not executable MDX.
 
 ## Comment and guestbook API

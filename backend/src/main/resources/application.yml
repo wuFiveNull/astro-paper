@@ -12,6 +12,8 @@ spring:
     multipart:
       max-file-size: ${APP_UPLOAD_MAX_FILE_SIZE:10MB}
       max-request-size: ${APP_UPLOAD_MAX_REQUEST_SIZE:10MB}
+      file-size-threshold: 0B
+      location: ${APP_UPLOAD_DIR:/data/uploads}
   jpa:
     open-in-view: false
     hibernate:
