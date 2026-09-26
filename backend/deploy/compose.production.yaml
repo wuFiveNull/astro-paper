@@ -60,8 +60,13 @@ services:
       ADMIN_BOOTSTRAP_EMAIL: ${ADMIN_BOOTSTRAP_EMAIL:-}
       ADMIN_BOOTSTRAP_DISPLAY_NAME: ${ADMIN_BOOTSTRAP_DISPLAY_NAME:-}
       ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      APP_UPLOAD_DIR: /data/uploads
+      APP_UPLOAD_MAX_FILE_SIZE: ${APP_UPLOAD_MAX_FILE_SIZE:-10MB}
+      APP_UPLOAD_MAX_REQUEST_SIZE: ${APP_UPLOAD_MAX_REQUEST_SIZE:-10MB}
+      APP_UPLOAD_MAX_FILE_SIZE_BYTES: ${APP_UPLOAD_MAX_FILE_SIZE_BYTES:-10485760}
     volumes:
       - ./astro-paper-api.jar:/app/astro-paper-api.jar:ro
+      - uploads_data:/data/uploads
     ports:
       - "127.0.0.1:${API_HOST_PORT:-18083}:8081"
     read_only: true
@@ -121,3 +126,5 @@ networks:
 volumes:
   mysql_data:
     name: ${MYSQL_VOLUME_NAME:-astro_paper_mysql_data}
+  uploads_data:
+    name: ${UPLOADS_VOLUME_NAME:-astro_paper_uploads_data}

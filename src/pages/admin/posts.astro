@@ -96,6 +96,21 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
             <label for="post-markdown" class="mb-1 block text-sm font-medium">Markdown content</label>
             <textarea id="post-markdown" required rows="18" class="border-border bg-background w-full rounded border px-3 py-2 font-mono text-sm leading-6"></textarea>
             <p class="text-muted-foreground mt-1 text-xs">Write Markdown. Database articles do not run MDX components.</p>
+            <div class="border-border mt-4 space-y-3 rounded border p-3">
+              <label for="post-image-file" class="block text-sm font-medium">Upload image</label>
+              <input
+                id="post-image-file"
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/avif"
+                class="border-border bg-background block w-full rounded border px-3 py-2 text-sm"
+              />
+              <div class="flex flex-wrap gap-2">
+                <button id="upload-content-image-button" type="button" class="border-border rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60">Upload and insert</button>
+                <button id="upload-cover-image-button" type="button" class="border-border rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-60">Upload as cover</button>
+              </div>
+              <p id="post-image-status" class="text-muted-foreground text-xs" role="status" aria-live="polite"></p>
+              <p class="text-muted-foreground text-xs">JPEG, PNG, GIF, WebP, and AVIF; maximum 10 MB. Markdown image syntax remains supported.</p>
+            </div>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div>
@@ -144,7 +159,7 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
 </Layout>
 
 <script>
-  import { getSessionUser, sendJson, type SessionUser } from "@/lib/session-api";
+  import { getCsrfToken, getSessionUser, sendJson, type SessionUser } from "@/lib/session-api";
 
   type Tag = { slug: string; name: string };
   type Post = {
@@ -326,6 +341,64 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
     };
   }
 
+  function insertMarkdownImage(url: string, filename: string) {
+    const textarea = document.querySelector<HTMLTextAreaElement>("#post-markdown");
+    if (!textarea) return;
+    const alt = filename.replace(/\.[^.]+$/, "").replace(/[\[\]]/g, "").trim() || "Uploaded image";
+    const markdown = `![${alt}](${url})`;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? start;
+    textarea.setRangeText(`\n${markdown}\n`, start, end, "end");
+    textarea.focus();
+  }
+
+  async function uploadImage(asCover: boolean) {
+    const fileInput = document.querySelector<HTMLInputElement>("#post-image-file");
+    const status = document.querySelector<HTMLElement>("#post-image-status");
+    const button = document.querySelector<HTMLButtonElement>(asCover ? "#upload-cover-image-button" : "#upload-content-image-button");
+    const file = fileInput?.files?.[0];
+    if (!file) {
+      if (status) status.textContent = "Choose an image first.";
+      return;
+    }
+    if (button) button.disabled = true;
+    if (status) {
+      status.classList.remove("text-red-600");
+      status.textContent = "Uploading image…";
+    }
+    try {
+      const csrf = await getCsrfToken();
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/v1/admin/uploads/images", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { Accept: "application/json", [csrf.headerName]: csrf.token },
+        body: form,
+      });
+      if (!response.ok) {
+        const problem = (await response.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(problem.detail ?? "The image could not be uploaded.");
+      }
+      const uploaded = (await response.json()) as { url: string; filename: string };
+      if (asCover) {
+        const cover = document.querySelector<HTMLInputElement>("#post-cover-image");
+        if (cover) cover.value = uploaded.url;
+      } else {
+        insertMarkdownImage(uploaded.url, file.name);
+      }
+      if (status) status.textContent = asCover ? "Image uploaded and set as cover." : "Image uploaded and inserted into Markdown.";
+      if (fileInput) fileInput.value = "";
+    } catch (error) {
+      if (status) {
+        status.classList.add("text-red-600");
+        status.textContent = error instanceof Error ? error.message : "The image could not be uploaded.";
+      }
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
   async function savePost(event: SubmitEvent) {
     event.preventDefault();
     const button = document.querySelector<HTMLButtonElement>("#save-post-button");
@@ -360,6 +433,8 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
     workspace.dataset.bound = "true";
     document.querySelector<HTMLFormElement>("#post-editor-form")?.addEventListener("submit", event => void savePost(event));
     document.querySelector<HTMLButtonElement>("#new-post-button")?.addEventListener("click", () => fillEditor());
+    document.querySelector<HTMLButtonElement>("#upload-content-image-button")?.addEventListener("click", () => void uploadImage(false));
+    document.querySelector<HTMLButtonElement>("#upload-cover-image-button")?.addEventListener("click", () => void uploadImage(true));
     document.querySelector<HTMLButtonElement>("#cancel-post-edit")?.addEventListener("click", () => {
       const editor = document.querySelector<HTMLElement>("#post-editor-panel");
       if (editor) editor.hidden = true;

@@ -66,6 +66,7 @@ public class ApiSecurityConfiguration {
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/posts", "/api/v1/posts/**", "/api/v1/tags", "/api/v1/tags/**", "/api/v1/search").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/comments").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/uploads/images/**").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(exceptions -> exceptions

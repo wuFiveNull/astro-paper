@@ -74,6 +74,15 @@ The checked-in `import-content.sh` helper imports the generated Markdown SQL usi
 ./import-content.sh /absolute/path/to/content-import.sql
 ```
 
+Uploaded images are stored in the named `astro_paper_uploads_data` volume and are served through `/api/v1/uploads/images/<generated-filename>`. Before the first API start, make the volume writable by the API uid:
+
+```bash
+docker volume create astro_paper_uploads_data
+docker run --rm -u 0 -v astro_paper_uploads_data:/data eclipse-temurin:21-jre chown 10001:10001 /data
+```
+
+The Astro SSR service proxies browser `/api/v1/*` requests to the internal Spring Boot service. This keeps login, CSRF, article management, and image upload on the same IP and cookie origin while leaving the API port private.
+
 ## Reverse-proxy cutover
 
 When HTTPS is introduced, route the selected hostname to `127.0.0.1:${WEB_HOST_PORT}` and `/api/` to the same Astro SSR service (the SSR service proxies browser API requests internally). Keep the old Compose project and its database volume intact until public smoke checks pass and rollback is no longer needed.

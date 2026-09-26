@@ -14,6 +14,8 @@ import com.astropaper.api.articles.ArticleOwnershipException;
 import com.astropaper.api.articles.InvalidArticleRequestException;
 import com.astropaper.api.interactions.InvalidCommentParentException;
 import com.astropaper.api.interactions.InvalidInteractionStatusException;
+import com.astropaper.api.uploads.ImageUploadException;
+import com.astropaper.api.uploads.ImageNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -124,6 +126,20 @@ public class ApiExceptionHandler {
     public ProblemDetail handleInvalidArticleRequest(InvalidArticleRequestException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
         problem.setTitle("Invalid article request");
+        return problem;
+    }
+
+    @ExceptionHandler(ImageUploadException.class)
+    public ProblemDetail handleImageUpload(ImageUploadException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Invalid image upload");
+        return problem;
+    }
+
+    @ExceptionHandler(ImageNotFoundException.class)
+    public ProblemDetail handleImageNotFound(ImageNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Image not found");
         return problem;
     }
 }

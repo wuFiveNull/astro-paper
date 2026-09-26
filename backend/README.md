@@ -70,6 +70,8 @@ Post metadata preserves the AstroPaper frontmatter names where practical (`pubDa
 - `PUT /api/v1/admin/posts/{id}` updates article content and metadata without changing its status.
 - `PUT /api/v1/admin/posts/{id}/status` accepts `DRAFT`, `PUBLISHED`, or `ARCHIVED`. Publishing requires `post:publish`; archiving requires `post:delete`; moving an article back to draft requires `post:update`. Archived content is retained, not hard-deleted.
 - `GET /api/v1/admin/tags` lists tags available to article editors. Saving an article reuses tags by name and creates missing tags.
+- `POST /api/v1/admin/uploads/images` accepts a `multipart/form-data` part named `file` for authenticated accounts with `post:create` or `post:update`; JPEG, PNG, GIF, WebP, and AVIF files up to 10 MB are stored with generated names and return a same-origin URL.
+- `GET /api/v1/uploads/images/{filename}` serves a stored image publicly so published Markdown can reference it. The original Markdown image syntax remains supported and rendered through the existing sanitizer.
 
 Every operation requires an active session and the matching permission. Editors are scoped to their own authored articles for listing, reading, editing, publishing, and archiving; administrators can manage all articles. The page uses the existing AstroPaper layout and accepts Markdown source, not executable MDX.
 
