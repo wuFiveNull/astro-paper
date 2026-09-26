@@ -1,0 +1,126 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+import Layout from "@/layouts/Layout.astro";
+import Header from "@/components/Header.astro";
+import Breadcrumb from "@/components/Breadcrumb.astro";
+import Main from "@/components/Main.astro";
+import Footer from "@/components/Footer.astro";
+import config from "@/config";
+
+export const prerender = false;
+
+const locale = Astro.currentLocale ?? config.site.lang;
+const loginUrl = new URL(getRelativeLocaleUrl(locale, "login"), Astro.url);
+loginUrl.searchParams.set("returnTo", Astro.url.pathname);
+---
+
+<Layout title={`Admin | ${config.site.title}`}>
+  <Header />
+  <Breadcrumb />
+
+  <Main pageTitle="Admin center" pageDesc="Choose a management area allowed by your permissions." class="max-w-app">
+    <p id="admin-status" class="text-muted-foreground mt-2 text-sm" role="status" aria-live="polite">
+      Checking permissions…
+    </p>
+    <a
+      id="admin-login-link"
+      class="text-accent mt-4 inline-block underline underline-offset-4"
+      href={`${loginUrl.pathname}${loginUrl.search}`}
+      hidden
+    >
+      Sign in
+    </a>
+
+    <section id="admin-workspace" class="mt-8 grid gap-4 sm:grid-cols-2" hidden>
+      <a
+        href={getRelativeLocaleUrl(locale, "account")}
+        class="border-border rounded border p-4 hover:border-accent"
+      >
+        <h2 class="font-semibold">My account</h2>
+        <p class="text-muted-foreground mt-1 text-sm">View your account details and sign out.</p>
+      </a>
+      <a
+        data-permissions="post:read"
+        href={getRelativeLocaleUrl(locale, "admin/posts")}
+        class="border-border rounded border p-4 hover:border-accent"
+      >
+        <h2 class="font-semibold">Article management</h2>
+        <p class="text-muted-foreground mt-1 text-sm">Create Markdown drafts, upload images, publish, or archive posts.</p>
+      </a>
+      <a
+        data-permissions="comment:moderate,message:read"
+        href={getRelativeLocaleUrl(locale, "admin/moderation")}
+        class="border-border rounded border p-4 hover:border-accent"
+      >
+        <h2 class="font-semibold">Comments and guestbook</h2>
+        <p class="text-muted-foreground mt-1 text-sm">Review comments and process private messages.</p>
+      </a>
+      <a
+        data-permissions="user:manage"
+        href={getRelativeLocaleUrl(locale, "admin/users")}
+        class="border-border rounded border p-4 hover:border-accent"
+      >
+        <h2 class="font-semibold">User management</h2>
+        <p class="text-muted-foreground mt-1 text-sm">Create accounts, change status, and assign roles.</p>
+      </a>
+      <a
+        data-permissions="permission:manage"
+        href={getRelativeLocaleUrl(locale, "admin/access")}
+        class="border-border rounded border p-4 hover:border-accent"
+      >
+        <h2 class="font-semibold">Roles and permissions</h2>
+        <p class="text-muted-foreground mt-1 text-sm">Configure permissions for non-ADMIN roles.</p>
+      </a>
+    </section>
+  </Main>
+
+  <Footer />
+</Layout>
+
+<script>
+  import { getSessionUser } from "@/lib/session-api";
+
+  async function setupAdminDashboard() {
+    const status = document.querySelector<HTMLElement>("#admin-status");
+    const workspace = document.querySelector<HTMLElement>("#admin-workspace");
+    const loginLink = document.querySelector<HTMLAnchorElement>("#admin-login-link");
+    if (!status || !workspace || !loginLink) return;
+
+    status.classList.remove("text-red-600");
+    status.textContent = "Checking permissions…";
+    workspace.hidden = true;
+    loginLink.hidden = true;
+
+    try {
+      const user = await getSessionUser();
+      if (!user) {
+        status.textContent = "Sign in to open the admin center.";
+        loginLink.hidden = false;
+        return;
+      }
+
+      const permissions = new Set(user.permissions);
+      const cards = Array.from(workspace.querySelectorAll<HTMLElement>("[data-permissions]"));
+      const visibleCards = cards.filter(card =>
+        (card.dataset.permissions ?? "")
+          .split(",")
+          .some(permission => permissions.has(permission))
+      );
+      if (visibleCards.length === 0) {
+        status.classList.add("text-red-600");
+        status.textContent = "This account has no management permissions.";
+        return;
+      }
+
+      for (const card of cards) card.hidden = !visibleCards.includes(card);
+      status.textContent = `Signed in as ${user.displayName}.`;
+      workspace.hidden = false;
+    } catch (error) {
+      status.classList.add("text-red-600");
+      status.textContent = error instanceof Error ? error.message : "Admin center is unavailable.";
+    }
+  }
+
+  void setupAdminDashboard();
+  document.addEventListener("astro:page-load", () => void setupAdminDashboard());
+</script>

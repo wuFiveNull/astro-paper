@@ -51,6 +51,15 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
       </dl>
 
       <a
+        id="admin-center-link"
+        class="text-accent underline underline-offset-4"
+        href={getRelativeLocaleUrl(locale, "admin")}
+        hidden
+      >
+        Open admin center
+      </a>
+
+      <a
         id="users-link"
         class="text-accent underline underline-offset-4"
         href={getRelativeLocaleUrl(locale, "admin/users")}
@@ -123,6 +132,20 @@ loginUrl.searchParams.set("returnTo", Astro.url.pathname);
       document.querySelector("#account-username")!.textContent = user.username;
       document.querySelector("#account-email")!.textContent = user.email;
       document.querySelector("#account-roles")!.textContent = user.roles.join(", ");
+      const adminCenterLink = document.querySelector<HTMLAnchorElement>("#admin-center-link");
+      if (adminCenterLink) {
+        adminCenterLink.hidden = !user.permissions.some(permission =>
+          [
+            "post:read",
+            "post:create",
+            "post:update",
+            "comment:moderate",
+            "message:read",
+            "user:manage",
+            "permission:manage",
+          ].includes(permission)
+        );
+      }
       const moderationLink = document.querySelector<HTMLAnchorElement>("#moderation-link");
       const postsAdminLink = document.querySelector<HTMLAnchorElement>("#posts-admin-link");
       if (postsAdminLink) {

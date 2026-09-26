@@ -114,6 +114,14 @@ const isActive = (path: string) => {
             {t.nav.account}
           </a>
         </li>
+        <li id="admin-nav-item" class="col-span-2" hidden>
+          <a
+            href={getRelativeLocaleUrl(locale, "admin")}
+            class:list={{ "active-nav": isActive("/admin") }}
+          >
+            Admin
+          </a>
+        </li>
         {
           features.showArchives && (
             <li class="col-span-2">
@@ -181,6 +189,18 @@ const isActive = (path: string) => {
 </header>
 
 <script>
+  import { getSessionUser } from "@/lib/session-api";
+
+  const adminPermissionCodes = new Set([
+    "post:read",
+    "post:create",
+    "post:update",
+    "comment:moderate",
+    "message:read",
+    "user:manage",
+    "permission:manage",
+  ]);
+
   function toggleNav() {
     const menuBtn = document.querySelector<HTMLButtonElement>("#menu-btn");
     const menuItems = document.querySelector("#menu-items");
@@ -234,9 +254,25 @@ const isActive = (path: string) => {
     });
   }
 
+  async function setupAdminNavigation() {
+    const adminItem = document.querySelector<HTMLElement>("#admin-nav-item");
+    if (!adminItem) return;
+    try {
+      const user = await getSessionUser();
+      adminItem.hidden = !user?.permissions.some(permission =>
+        adminPermissionCodes.has(permission)
+      );
+    } catch {
+      adminItem.hidden = true;
+    }
+  }
+
   toggleNav();
   document.addEventListener("astro:after-swap", toggleNav);
 
   handleSkipToContent();
   document.addEventListener("astro:after-swap", handleSkipToContent);
+
+  void setupAdminNavigation();
+  document.addEventListener("astro:page-load", () => void setupAdminNavigation());
 </script>
