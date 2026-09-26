@@ -126,3 +126,9 @@ COMPOSE_PROJECT_NAME=astro-paper-api-smoke-local API_HOST_PORT=18082 bash auth-s
 ```
 
 The script creates a private `.env` with random test credentials, bootstraps a temporary administrator, recreates the API without bootstrap secrets, and checks health, login, account creation, Markdown article management/publication, editor ownership limits, comment visibility/moderation, guestbook status changes, permission denials, and account disable. It starts only isolated MySQL and API services, skips the Astro image build, caps combined container memory at 640 MiB, and removes its generated `.env`, cookie jars, containers, and dedicated disposable database volume when it exits, including after a failed run. Its project name must start with `astro-paper-api-smoke-`; cleanup is scoped to that Compose project. It does not stop or connect to the production stack.
+
+## Production deployment preparation
+
+`backend/deploy/compose.production.yaml` is the production-oriented stack. It uses a separate named MySQL volume, keeps MySQL private, binds API and web to loopback ports, and expects a prebuilt Astro SSR image through `WEB_IMAGE`. The API runs the uploaded `astro-paper-api.jar`, so the low-memory server does not need to build the Astro image.
+
+See [`backend/deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md) for the backup, first-admin bootstrap, content import, health-check, and reverse-proxy cutover runbook. The current server already has another Compose project on port 80; do not stop or replace it until a domain and maintenance-window cutover has been explicitly chosen.
